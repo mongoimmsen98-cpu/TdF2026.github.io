@@ -23,12 +23,6 @@ jobs:
         with:
           r-version: '4.6.1'  # Match your renv.lock R version
 
-
-     - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-
             
       - name: Install R Dependencies
         uses: r-lib/actions/setup-renv@v2
