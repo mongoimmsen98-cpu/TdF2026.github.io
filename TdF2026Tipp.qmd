@@ -111,6 +111,39 @@ datatable(stage,
           )
 ```
 
+## Punkteverlauf
+
+Kumulierte Punkte pro Spieler über die Etappen.
+
+```{r}
+#| eval: true
+#| echo: false
+#| include: true
+
+stage_long <- stage %>%
+  rename(Spieler = 1) %>%
+  pivot_longer(-Spieler, names_to = "Etappe", values_to = "Punkte") %>%
+  mutate(Etappe = factor(Etappe, levels = unique(Etappe))) %>%
+  arrange(Spieler, Etappe) %>%
+  group_by(Spieler) %>%
+  mutate(Kumuliert = cumsum(Punkte)) %>%
+  ungroup()
+
+p <- ggplot(
+  stage_long,
+  aes(
+    x = Etappe, y = Kumuliert, color = Spieler, group = Spieler,
+    text = paste0(Spieler, "<br>", Etappe, ": ", Kumuliert, " Pkt")
+  )
+) +
+  geom_line() +
+  geom_point(size = 1.5) +
+  labs(x = "Etappe", y = "Kumulierte Punkte", color = "Spieler") +
+  theme_minimal()
+
+ggplotly(p, tooltip = "text")
+```
+
 ## Fahrer eurer Teams
 
 ```{r}
