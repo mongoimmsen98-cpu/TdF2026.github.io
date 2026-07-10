@@ -1,0 +1,7 @@
+---
+title: "Home"
+---
+
+## Tour de France 2026 Tippspiel
+
+Willkommen! Hier geht's zur [Auswertung](TdF2026Tipp.qmd).

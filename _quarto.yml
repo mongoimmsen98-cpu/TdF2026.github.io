@@ -7,6 +7,8 @@ website:
     left:
       - href: index.qmd
         text: Home
+      - href: TdF2026Tipp.qmd
+        text: Tippspiel
       - about.qmd
 
 format:
