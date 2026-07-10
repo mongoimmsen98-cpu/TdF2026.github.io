@@ -32,6 +32,10 @@ jobs:
       - name: Restore R packages
         run: renv::restore()
         shell: Rscript {0}
+        
+     - name: Install missing packages
+       run: renv::install(c("ggplot2", "tidyverse", "readxl", "dplyr", "plotly", "tidyr", "stringr", "writexl", "openxlsx", "DT", "knitr", "kableExtra"))
+       shell: Rscript {0}
 
       - name: Set up Quarto
         uses: quarto-dev/quarto-actions/setup@v2
