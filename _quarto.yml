@@ -3,13 +3,6 @@ project:
 
 website:
   title: "TdF2026"
-  navbar:
-    left:
-      - href: index.qmd
-        text: Home
-      - href: TdF2026Tipp.qmd
-        text: Tippspiel
-      - about.qmd
 
 format:
   html:
