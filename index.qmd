@@ -8,11 +8,8 @@ website:
   date: today 
   format: 
    html:
-    self-contained: true 
-    toc: true 
-    toc-title: Inhalt
-    toc-location: left 
-    theme: 
+    self-contained: true
+    theme:
       light: minty
       dark: superhero
     fontsize: 32px
@@ -65,7 +62,11 @@ library(kableExtra)
 total = read_excel("tdf_tippspiel_master.xlsx", sheet = "Auswertung Gesamt")
 stage = read_excel("tdf_tippspiel_master.xlsx", sheet = "Auswertung Stage")
 teams = read_excel("tdf_tippspiel_master.xlsx", sheet = "Spieler_Teams")
-startlist = read_excel("tdf_tippspiel_master.xlsx", sheet = "Startlist2026")
+startlist = read_excel("tdf_tippspiel_master.xlsx", sheet = "Startlist2026") %>%
+  # 24 Platzhalter-Zeilen ohne echten Fahrer (kein BIB, "Rider" ist zufaellig
+  # ein Teamname) rausfiltern -- sonst tauchen Teamnamen als Fahrer auf und
+  # ggplotly() bricht bei den dadurch leeren Datengruppen ab.
+  filter(!is.na(BIB))
 spieler_liste <-sort(unique(teams$Spieler))
 ```
 
@@ -79,7 +80,12 @@ spieler_liste <-sort(unique(teams$Spieler))
 stage_long <- stage %>%
   rename(Spieler = 1) %>%
   pivot_longer(-Spieler, names_to = "Etappe", values_to = "Punkte") %>%
-  mutate(Etappe = factor(Etappe, levels = unique(Etappe))) %>%
+  mutate(
+    Etappe = factor(Etappe, levels = unique(Etappe)),
+    # "stage" nennt Etappen "S 01", "startlist"/"teams" nennen sie "S01"/
+    # "Stage01" -- ueber eine gemeinsame Nummer querverweisbar machen.
+    EtappeNum = as.integer(str_extract(as.character(Etappe), "\\d+"))
+  ) %>%
   arrange(Spieler, Etappe) %>%
   group_by(Spieler) %>%
   mutate(Kumuliert = cumsum(Punkte)) %>%
@@ -125,7 +131,23 @@ rang_pro_etappe <- stage_long %>%
   group_by(Etappe) %>%
   mutate(Rang = rank(-Kumuliert, ties.method = "min")) %>%
   ungroup() %>%
-  select(Spieler, Etappe, Rang)
+  select(Spieler, Etappe, EtappeNum, Rang)
+
+# Rang-Aenderung von einer Etappe zur naechsten, je Spieler (Basis fuer
+# "groesster Aufsteiger/Absteiger des Tages" im Etappen-Modal)
+rang_diff <- rang_pro_etappe %>%
+  arrange(Spieler, EtappeNum) %>%
+  group_by(Spieler) %>%
+  mutate(Diff = lag(Rang) - Rang) %>%
+  ungroup() %>%
+  filter(!is.na(Diff))
+
+# Punkte je Spieler-Pick (Fahrer) und Etappe -- Basis fuer "bester Einzel-Pick
+# des Tages" im Etappen-Modal.
+teams_long_picks <- teams_mit_summe %>%
+  select(Spieler, Fahrer, matches("^Stage\\d+$")) %>%
+  pivot_longer(matches("^Stage\\d+$"), names_to = "StageCol", values_to = "PickPunkte") %>%
+  mutate(EtappeNum = as.integer(str_extract(StageCol, "\\d+")))
 
 # Bester/schwaechster Etappentag und Schnitt je Spieler
 etappen_extreme <- stage_long %>%
@@ -141,6 +163,60 @@ etappen_extreme <- stage_long %>%
 
 slugify <- function(x) gsub("^-+|-+$", "", gsub("[^a-z0-9]+", "-", tolower(x)))
 
+# Faerbt in Gesamtstand/Punkte-pro-Etappe die KOMPLETTE Zeile des Kanter-Kaders
+# (immer Rang 0, erste Spalte) ein und gibt ihr einen erklaerenden
+# title-Tooltip -- wiederverwendet in beiden Tabellen.
+kanter_kader_row_callback <- DT::JS(
+  "function(row, data) {",
+  "  if (data[0] === 0) {",
+  "    $(row).css('background-color', '#cfe2ff');",
+  "    $(row).attr('title', 'Kanter-Kader: das theoretisch bestmoegliche Team (bis zu 15 Fahrer + Team-Tipp, Budget 560) -- haette man die Ergebnisse vorher gekannt.');",
+  "  }",
+  "}"
+)
+
+# Hebt in einer Fahrer-Tabelle (kable) die Zeile mit dem besten
+# Punkte-pro-Kosten-Verhaeltnis hervor. Kein Effekt, wenn fuer keinen der
+# Fahrer eine Kosten-Angabe bekannt ist.
+# Markiert in einem Vektor bereits fertiger Fahrer-Link-HTML-Strings denjenigen
+# mit dem besten Punkte-pro-Kosten-Verhaeltnis (gelb, mit erklaerendem
+# title-Tooltip beim Drueberhovern). Kein Effekt, wenn keine Kosten bekannt sind.
+# Hebt in einer fertigen kable()-HTML-Tabelle die GANZE ZEILE mit dem besten
+# Punkte-pro-Kosten-Verhaeltnis hervor (Hintergrundfarbe + title-Tooltip auf
+# der kompletten <tr>, nicht nur der Fahrer-Zelle). Kein Effekt, wenn keine
+# Kosten bekannt sind.
+mark_best_value_row <- function(kable_obj, punkte, rating) {
+  ratio <- ifelse(!is.na(rating) & rating > 0, punkte / rating, -Inf)
+  if (all(is.infinite(ratio))) return(kable_obj)
+  idx <- which.max(ratio)
+  tooltip <- htmltools::htmlEscape(sprintf(
+    "Bestes Punkte-pro-Kosten-Verhältnis in diesem Kader: %.2f Punkte je Kosten-Punkt", ratio[idx]
+  ))
+  kbl <- kableExtra::row_spec(kable_obj, idx, bold = TRUE, background = "#fff3cd")
+  html <- as.character(kbl)
+  body_split <- str_locate(html, "<tbody>")[1, "end"]
+  vorher <- str_sub(html, 1, body_split)
+  nachher <- str_sub(html, body_split + 1)
+  tr_pos <- str_locate_all(nachher, "<tr")[[1]]
+  p <- tr_pos[idx, "start"]
+  nachher <- paste0(
+    str_sub(nachher, 1, p + 2),
+    sprintf(' title="%s"', tooltip),
+    str_sub(nachher, p + 3)
+  )
+  htmltools::HTML(paste0(vorher, nachher))
+}
+
+# Bettet ein plotly-Widget als HTML-String ein (fuer die manuell per sprintf()
+# gebauten Modals). knit_meta_add() registriert die JS/CSS-Abhaengigkeiten
+# (plotly.js etc.) bei knitr, so dass sie nur EINMAL fuer die ganze Seite
+# geladen werden statt einmal pro Chart -- sonst waere die Seite riesig.
+embed_widget <- function(widget) {
+  rendered <- htmltools::renderTags(widget)
+  knitr::knit_meta_add(list(rendered$dependencies))
+  as.character(htmltools::tagList(htmltools::HTML(rendered$html)))
+}
+
 # Klickbarer Spielername, oeffnet dessen Detail-Modal -- ueberall auf der
 # Seite verwendet, wo ein Spielername in einer Tabelle auftaucht.
 player_link <- function(name) {
@@ -152,16 +228,20 @@ player_link <- function(name) {
 
 # Grosses Verlaufs-Diagramm fuer einen Spieler, Rest der Teilnehmer als grauer Kontext
 make_player_chart <- function(spieler_name) {
-  p <- ggplot(stage_long, aes(Etappe, Kumuliert, group = Spieler)) +
-    geom_line(data = ~ filter(.x, Spieler != spieler_name), color = "grey80", linewidth = 0.5) +
-    geom_line(data = ~ filter(.x, Spieler == spieler_name), color = "#2c7fb8", linewidth = 1.4) +
-    geom_point(data = ~ filter(.x, Spieler == spieler_name), color = "#2c7fb8", size = 2) +
-    labs(x = "Etappe", y = "Kumulierte Punkte") +
+  andere <- stage_long %>% filter(Spieler != spieler_name)
+  eigene <- stage_long %>% filter(Spieler == spieler_name) %>%
+    mutate(txt = paste0(Spieler, "<br>", Etappe, ": ", Kumuliert, " Pkt"))
+  opt <- opt_line_data %>% mutate(txt = paste0("Kanter-Kader<br>", Etappe, ": ", Kumuliert, " Pkt"))
+
+  p <- ggplot() +
+    geom_line(data = andere, aes(Etappe, Kumuliert, group = Spieler), color = "grey80", linewidth = 0.5) +
+    geom_line(data = eigene, aes(Etappe, Kumuliert, group = Spieler, text = txt), color = "#2c7fb8", linewidth = 1.4) +
+    geom_point(data = eigene, aes(Etappe, Kumuliert, group = Spieler, text = txt), color = "#2c7fb8", size = 2) +
+    geom_line(data = opt, aes(Etappe, Kumuliert, group = Spieler, text = txt), color = "black", linetype = "dashed", linewidth = 0.9) +
+    geom_point(data = opt, aes(Etappe, Kumuliert, group = Spieler, text = txt), color = "black", size = 1.5) +
+    labs(x = "Etappe", y = "Kumulierte Punkte", caption = "Gestrichelt: Kanter-Kader (theoretisches Punkte-Maximum)") +
     theme_minimal()
-  tmp <- tempfile(fileext = ".png")
-  on.exit(unlink(tmp), add = TRUE)
-  ggsave(tmp, p, width = 5.5, height = 3, dpi = 130, bg = "white")
-  sprintf('<img src="data:image/png;base64,%s" style="max-width:100%%;height:auto;">', base64enc::base64encode(tmp))
+  embed_widget(ggplotly(p, tooltip = "text", width = 550, height = 300))
 }
 
 # Baut das komplette Bootstrap-Modal (HTML) fuer einen Spieler
@@ -171,12 +251,14 @@ build_player_modal <- function(spieler_name) {
     filter(Spieler == spieler_name) %>%
     select(Etappe, Rang) %>%
     kable(format = "html", col.names = c("Etappe", "Rang"), table.attr = "class='table table-sm table-striped'")
-  fahrer_tbl <- teams_mit_summe %>%
+  fahrer_df <- teams_mit_summe_mit_rating %>%
     filter(Spieler == spieler_name) %>%
-    arrange(desc(FahrerPunkte)) %>%
+    arrange(desc(FahrerPunkte))
+  fahrer_tbl <- fahrer_df %>%
     mutate(Fahrer = rider_link(Fahrer)) %>%
-    select(Fahrer, FahrerPunkte) %>%
-    kable(format = "html", escape = FALSE, col.names = c("Fahrer", "Punkte"), table.attr = "class='table table-sm table-striped'")
+    select(Fahrer, Rating, FahrerPunkte) %>%
+    kable(format = "html", escape = FALSE, col.names = c("Fahrer", "Kosten", "Punkte"), table.attr = "class='table table-sm table-striped'") %>%
+    mark_best_value_row(fahrer_df$FahrerPunkte, fahrer_df$Rating)
   tipp <- team_tipps %>% filter(Spieler == spieler_name)
   tipp_html <- if (nrow(tipp) == 0) {
     "kein Team-Tipp hinterlegt"
@@ -241,12 +323,26 @@ rider_extreme <- fahrer_long %>%
     Team = first(Team), Specialty = first(Specialty), Age = first(Age), BIB = first(BIB),
     Gesamt = sum(Punkte),
     Schnitt = round(mean(Punkte), 1),
+    Konsistenz = round(sd(Punkte), 1),
+    Nullrunden = sum(Punkte == 0),
+    Etappen = n(),
     BesteEtappe = as.character(Etappe[which.max(Punkte)]),
     BestePunkte = max(Punkte),
     SchlechtesteEtappe = as.character(Etappe[which.min(Punkte)]),
     SchlechtestePunkte = min(Punkte),
     .groups = "drop"
-  )
+  ) %>%
+  mutate(RangGesamt = rank(-Gesamt, ties.method = "min")) %>%
+  group_by(Team) %>%
+  mutate(RangTeam = rank(-Gesamt, ties.method = "min"), FahrerImTeam = n()) %>%
+  ungroup() %>%
+  group_by(Specialty) %>%
+  mutate(RangSpecialty = rank(-Gesamt, ties.method = "min"), FahrerInSpecialty = n()) %>%
+  ungroup()
+
+# Wie viele Spieler haben ueberhaupt einen Fahrer getippt (fuer den
+# Beliebtheits-Anteil je Fahrer in der Detailansicht)
+anzahl_spieler <- n_distinct(total$Name)
 
 # Punkte je Team (Summe seiner Fahrer) und Etappe, mit laufender Summe --
 # Basis fuer die Team-Detailansicht.
@@ -261,6 +357,14 @@ team_long <- startlist %>%
   mutate(Kumuliert = cumsum(Punkte)) %>%
   ungroup()
 
+# Anteil der Top-3-Fahrer an den Gesamtpunkten je Etappe -- misst wie
+# konzentriert/eng eine Etappe war; Basis fuer den Vergleich im Etappen-Modal.
+konzentration_pro_etappe <- fahrer_long %>%
+  arrange(Etappe, desc(Punkte)) %>%
+  group_by(Etappe) %>%
+  summarise(Top3Anteil = sum(head(Punkte, 3)) / sum(Punkte) * 100, .groups = "drop")
+konzentration_schnitt <- mean(konzentration_pro_etappe$Top3Anteil)
+
 team_extreme <- team_long %>%
   group_by(Team) %>%
   summarise(
@@ -272,6 +376,266 @@ team_extreme <- team_long %>%
     SchlechtestePunkte = min(Punkte),
     .groups = "drop"
   )
+
+# "RIderPoints.csv" ist ein Excel-Rohexport: 5 Team-Bloecke nebeneinander (je
+# 4 Spalten: Label/Name/Rating/Leerspalte), jeder Block gefolgt von 8
+# Fahrer-Zeilen, Bloecke durch Leerzeilen getrennt. Zu Fahrer- und
+# Team-Ratings umformen -- Basis fuer das Budget-optimale Team weiter unten.
+parse_rider_prices <- function(path) {
+  raw <- suppressMessages(read_csv(path, col_names = FALSE, skip = 1, show_col_types = FALSE))
+  raw <- as.matrix(raw)
+  rider_records <- list()
+  team_records <- list()
+  n <- nrow(raw)
+  i <- 1
+  while (i <= n) {
+    row <- raw[i, ]
+    if (all(is.na(row) | trimws(row) == "")) {
+      i <- i + 1
+      next
+    }
+    block_starts <- seq(1, length(row), by = 4)
+    team_blocks <- list()
+    for (bs in block_starts) {
+      label <- if (bs <= length(row)) trimws(row[bs]) else NA
+      name <- if (bs + 1 <= length(row)) trimws(row[bs + 1]) else NA
+      team_rating <- if (bs + 2 <= length(row)) trimws(row[bs + 2]) else NA
+      if (!is.na(label) && label == "Team" && !is.na(name) && name != "") {
+        team_blocks[[as.character(bs)]] <- name
+        team_records[[length(team_records) + 1]] <- data.frame(
+          Team = name, Rating = suppressWarnings(as.numeric(team_rating))
+        )
+      }
+    }
+    if (length(team_blocks) > 0) {
+      i <- i + 1
+      for (pr in 1:8) {
+        if (i > n) break
+        row2 <- raw[i, ]
+        for (bs_chr in names(team_blocks)) {
+          bs <- as.integer(bs_chr)
+          name <- if (bs + 1 <= length(row2)) trimws(row2[bs + 1]) else NA
+          rating <- if (bs + 2 <= length(row2)) trimws(row2[bs + 2]) else NA
+          if (!is.na(name) && name != "") {
+            rider_records[[length(rider_records) + 1]] <- data.frame(
+              Team = team_blocks[[bs_chr]], Rider = name,
+              Rating = suppressWarnings(as.numeric(rating))
+            )
+          }
+        }
+        i <- i + 1
+      }
+    } else {
+      i <- i + 1
+    }
+  }
+  list(riders = bind_rows(rider_records), teams = bind_rows(team_records))
+}
+
+match_key <- function(x) gsub("[^a-z]", "", tolower(stringi::stri_trans_general(x, "Latin-ASCII")))
+
+rider_prices_parsed <- parse_rider_prices("RIderPoints.csv")
+
+rider_prices <- rider_prices_parsed$riders %>%
+  mutate(MatchKey = match_key(Rider))
+
+startlist_keys <- startlist %>%
+  transmute(Rider, MatchKey = match_key(str_remove(Rider, fixed(Team))))
+
+# Preis je echtem Fahrer (per Namensabgleich, Diakritika/Gross-Kleinschreibung
+# normalisiert); Fahrer ohne Preis (z.B. Nachnominierungen) bleiben aussen vor.
+rider_budget <- rider_prices %>%
+  inner_join(startlist_keys, by = "MatchKey", suffix = c("", "Real")) %>%
+  distinct(Rider = RiderReal, .keep_all = TRUE) %>%
+  select(Rider, Rating)
+
+# Echte Spieler-Picks mit Fahrer-Kosten verknuepft (wo bekannt) -- Basis, um
+# in jedem Fahrer-Kader den besten Punkte/Kosten-Pick hervorzuheben.
+teams_mit_summe_mit_rating <- teams_mit_summe %>%
+  left_join(rider_budget, by = c("Fahrer" = "Rider"))
+
+# Fahrer-Stats mit Kosten verknuepft -- Basis fuer das Kategorien-Ranking.
+rider_extreme_mit_rating <- rider_extreme %>%
+  left_join(rider_budget, by = "Rider") %>%
+  mutate(Value = if_else(!is.na(Rating) & Rating > 0, round(Gesamt / Rating, 2), NA_real_))
+
+# Preis je echtem Team, gleiches Prinzip wie bei den Fahrern.
+startlist_team_keys <- startlist %>%
+  filter(!is.na(Team)) %>%
+  distinct(Team) %>%
+  transmute(Team, MatchKey = match_key(Team))
+
+team_budget <- rider_prices_parsed$teams %>%
+  distinct(Team, .keep_all = TRUE) %>%
+  mutate(MatchKey = match_key(Team)) %>%
+  inner_join(startlist_team_keys, by = "MatchKey", suffix = c("", "Real")) %>%
+  distinct(Team = TeamReal, .keep_all = TRUE) %>%
+  select(Team, Rating)
+
+# Kumulierte Teamwertungs-Punkte je Etappe -- nur bekannt fuer Teams, die
+# mindestens ein Spieler tatsaechlich getippt hat (team_tipps); alle anderen
+# gehen mit 0 Zusatzpunkten ins optimale Team ein (siehe Chat: keine Rohdaten
+# fuer die offizielle Team-Gesamtwertung aller 23 Teams verfuegbar).
+team_score_long <- team_tipps %>%
+  distinct(Team, .keep_all = TRUE) %>%
+  select(Team, matches("^Stage\\d+$")) %>%
+  pivot_longer(matches("^Stage\\d+$"), names_to = "StageCol", values_to = "Punkte") %>%
+  mutate(EtappeNum = as.integer(str_extract(StageCol, "\\d+"))) %>%
+  arrange(Team, EtappeNum) %>%
+  group_by(Team) %>%
+  mutate(Kumuliert = cumsum(Punkte)) %>%
+  ungroup()
+
+# 0/1-Rucksack: waehlt aus `pool` bis zu `k` Fahrer (nicht zwingend alle `k`
+# Slots) mit Kostensumme <= `budget`, die den Wert (Punkte) maximieren.
+# Reine Nullrunden-Fahrer landen so nur im Team, wenn sie tatsaechlich
+# noetig waeren -- was bei nicht-negativen Punktwerten nie der Fall ist.
+optimal_team <- function(pool, k = 15, budget = 560) {
+  costs <- as.integer(round(pool$Rating / 10))
+  values <- pool$Punkte
+  budget <- as.integer(budget / 10)
+  n <- length(costs)
+  dp <- matrix(-Inf, nrow = k + 1, ncol = budget + 1)
+  dp[1, ] <- 0
+  chosen <- array(FALSE, dim = c(n, k + 1, budget + 1))
+  for (idx in seq_len(n)) {
+    c_i <- costs[idx]
+    v_i <- values[idx]
+    if (is.na(c_i) || c_i > budget || c_i <= 0) next
+    for (kk in k:1) {
+      for (b in budget:c_i) {
+        candidate <- dp[kk, b - c_i + 1] + v_i
+        if (candidate > dp[kk + 1, b + 1]) {
+          dp[kk + 1, b + 1] <- candidate
+          chosen[idx, kk + 1, b + 1] <- TRUE
+        }
+      }
+    }
+  }
+  # Bestes Ergebnis mit BIS ZU k Fahrern (nicht zwingend genau k): das
+  # Maximum ueber die gesamte Tabelle, nicht nur die "genau k"-Zeile.
+  best_flat <- which.max(dp)
+  best_row <- ((best_flat - 1) %% nrow(dp)) + 1
+  best_col <- ((best_flat - 1) %/% nrow(dp)) + 1
+  best_value <- dp[best_row, best_col]
+  selected <- c()
+  kk <- best_row - 1
+  b <- best_col - 1
+  for (idx in n:1) {
+    if (kk > 0 && chosen[idx, kk + 1, b + 1]) {
+      selected <- c(selected, idx)
+      kk <- kk - 1
+      b <- b - costs[idx]
+    }
+  }
+  pool[selected, ] %>% arrange(desc(Punkte)) %>% mutate(GesamtPunkte = best_value, GesamtKosten = sum(Rating))
+}
+
+# Wie ein echter Tipp: bis zu 15 Fahrer und hoechstens 1 Team-Tipp, deren
+# Kosten zusammen <= 560 bleiben muessen. Ein Team-Tipp ist optional -- eine
+# "kein Team"-Option (0 Kosten, 0 Punkte) steht immer mit zur Wahl, falls das
+# billigste verfuegbare Team keine Zusatzpunkte bringt. Probiert jedes
+# preislich bekannte Team (plus "kein Team") als Team-Tipp durch (der Rest
+# des Budgets geht an die Fahrer) und behaelt die Kombination mit der
+# hoechsten Gesamtpunktzahl.
+optimal_team_full <- function(pool_riders, team_options, k = 15, budget = 560) {
+  team_options <- bind_rows(tibble(Team = NA_character_, Rating = 0, Punkte = 0), team_options)
+  best <- NULL
+  for (ti in seq_len(nrow(team_options))) {
+    team_rating <- team_options$Rating[ti]
+    if (is.na(team_rating) || team_rating > budget) next
+    riders_result <- optimal_team(pool_riders, k = k, budget = budget - team_rating)
+    total_value <- riders_result$GesamtPunkte[1] + team_options$Punkte[ti]
+    if (is.null(best) || total_value > best$total) {
+      best <- list(
+        riders = riders_result, team = team_options$Team[ti],
+        team_rating = team_rating, team_score = team_options$Punkte[ti],
+        total = total_value
+      )
+    }
+  }
+  best
+}
+
+# Fuer jede Etappe die (im Rahmen des 560-Punkte-Budgets) bestmoegliche
+# Kombination aus bis zu 15 Fahrern und optional einem Team-Tipp bis zu
+# diesem Zeitpunkt der Tour.
+# Jede Etappe unabhaengig neu optimiert, mit Kenntnis NUR der Ergebnisse bis
+# zu dieser Etappe (nicht der ganzen Tour) -- "haette man's bis dahin
+# gewusst". Etappe 8 kann daher ein anderes Team zeigen als Etappe 9.
+optimales_team_pro_etappe <- lapply(levels(fahrer_long$Etappe), function(etappe_name) {
+  etappe_num <- as.integer(str_extract(etappe_name, "\\d+"))
+  pool <- fahrer_long %>%
+    filter(Etappe == etappe_name) %>%
+    inner_join(rider_budget, by = "Rider") %>%
+    select(Rider, Team, Punkte = Kumuliert, Rating)
+  team_options <- team_budget %>%
+    left_join(
+      team_score_long %>% filter(EtappeNum == etappe_num) %>% select(Team, Punkte = Kumuliert),
+      by = "Team"
+    ) %>%
+    mutate(Punkte = coalesce(Punkte, 0))
+  best <- optimal_team_full(pool, team_options)
+  best$riders %>%
+    mutate(
+      Etappe = etappe_name,
+      GesamtPunkte = best$total,
+      GesamtKosten = GesamtKosten + best$team_rating,
+      OptTeam = best$team, OptTeamRating = best$team_rating, OptTeamPunkte = best$team_score
+    )
+})
+names(optimales_team_pro_etappe) <- levels(fahrer_long$Etappe)
+
+# Das aktuell (nach der letzten Etappe) optimale Team -- Basis fuer den
+# Kanter-Kader-Hinweis bei "Wer kann was?".
+optimales_team_aktuell <- optimales_team_pro_etappe[[tail(levels(fahrer_long$Etappe), 1)]]$Rider
+
+# WICHTIG: jede Etappen-Kachel (optimales_team_pro_etappe[[etappe_name]])
+# ist unabhaengig fuer genau diese Etappe optimiert -- verschiedene Etappen
+# koennen verschiedene Teams zeigen (siehe oben). Fuer GLOBALE Vergleiche
+# (Gesamtstand, Punkte pro Etappe, Punkteverlauf-Baseline, Baseline in jedem
+# Spieler-Chart) waere es irrefuehrend, diese wechselnden Teams zu einer
+# Linie zusammenzurechnen -- stattdessen wird EIN festes Team verwendet: das
+# fuer die letzte (aktuell 9.) Etappe optimierte, dessen eigene kumulierte
+# Punkte ueber alle Etappen nachverfolgt werden.
+kanter_kader_fix <- optimales_team_pro_etappe[[tail(levels(fahrer_long$Etappe), 1)]]
+kanter_kader_fix_riders <- kanter_kader_fix$Rider
+kanter_kader_fix_team <- kanter_kader_fix$OptTeam[1]
+
+# Kumulierte und Etappen-Delta-Punkte des FESTEN (S09-)Teams, in derselben
+# Reihenfolge wie levels(fahrer_long$Etappe) -- Basis um das Kanter-Kader-Team
+# als virtuellen Spieler in Gesamtstand/Punkte pro Etappe/Punkteverlauf
+# auftauchen zu lassen.
+opt_gesamt_pro_etappe <- fahrer_long %>%
+  filter(Rider %in% kanter_kader_fix_riders) %>%
+  group_by(Etappe) %>%
+  summarise(RiderPunkte = sum(Kumuliert), .groups = "drop") %>%
+  mutate(EtappeNum = as.integer(str_extract(as.character(Etappe), "\\d+"))) %>%
+  left_join(
+    if (is.na(kanter_kader_fix_team)) {
+      tibble(EtappeNum = integer(), TeamPunkte = double())
+    } else {
+      team_score_long %>% filter(Team == kanter_kader_fix_team) %>% select(EtappeNum, TeamPunkte = Kumuliert)
+    },
+    by = "EtappeNum"
+  ) %>%
+  arrange(EtappeNum) %>%
+  transmute(Etappe = as.character(Etappe), OptGesamtPunkte = RiderPunkte + coalesce(TeamPunkte, 0))
+opt_delta_pro_etappe <- opt_gesamt_pro_etappe %>%
+  mutate(OptPunkte = OptGesamtPunkte - lag(OptGesamtPunkte, default = 0))
+
+# Kanter-Kader als eigene "Spieler"-Zeitreihe (gleiche Etappen-Level wie
+# stage_long, "S 01"-Schreibweise) -- Basis fuer Punkteverlauf und als
+# Baseline in jedem Spieler-Chart. Zeigt immer das FESTE (S09-)Team.
+opt_line_data <- tibble(
+  Spieler = "Kanter-Kader",
+  Etappe = factor(
+    levels(stage_long$Etappe)[seq_along(opt_gesamt_pro_etappe$OptGesamtPunkte)],
+    levels = levels(stage_long$Etappe)
+  ),
+  Kumuliert = opt_gesamt_pro_etappe$OptGesamtPunkte
+)
+
 
 # Die Fahrer-Werte in den Excel-Sheets sind "NachnameVornameTeamname" ohne
 # Trenner (z.B. "PogačarTadejUAE Team Emirates - XRG"). Fuer die Anzeige den
@@ -307,32 +671,40 @@ team_link <- function(name) {
   )
 }
 
-# Balkendiagramm der Punkte je Etappe fuer einen Fahrer
+# Balkendiagramm der Punkte je Etappe fuer einen Fahrer, mit Team-Schnitt
+# dieser Etappe als Linie zum Vergleich
 make_rider_chart <- function(rider_name) {
-  p <- fahrer_long %>%
-    filter(Rider == rider_name) %>%
-    ggplot(aes(Etappe, Punkte)) +
-    geom_col(fill = "#2c7fb8") +
-    labs(x = "Etappe", y = "Punkte") +
+  team_name <- rider_extreme %>% filter(Rider == rider_name) %>% pull(Team)
+  eigene <- fahrer_long %>% filter(Rider == rider_name) %>%
+    mutate(txt = paste0(Etappe, ": ", Punkte, " Pkt"))
+  team_schnitt <- fahrer_long %>%
+    filter(Team == team_name) %>%
+    group_by(Etappe) %>%
+    summarise(Punkte = mean(Punkte), .groups = "drop") %>%
+    mutate(txt = paste0("Team-Schnitt ", Etappe, ": ", round(Punkte, 1), " Pkt"))
+
+  p <- ggplot() +
+    geom_col(data = eigene, aes(Etappe, Punkte, text = txt), fill = "#2c7fb8") +
+    geom_line(data = team_schnitt, aes(Etappe, Punkte, group = 1, text = txt), color = "#e6550d", linewidth = 1) +
+    geom_point(data = team_schnitt, aes(Etappe, Punkte, text = txt), color = "#e6550d", size = 2) +
+    labs(x = "Etappe", y = "Punkte", caption = "Balken: Fahrer · Linie: Team-Schnitt") +
     theme_minimal()
-  tmp <- tempfile(fileext = ".png")
-  on.exit(unlink(tmp), add = TRUE)
-  ggsave(tmp, p, width = 5, height = 2.8, dpi = 130, bg = "white")
-  sprintf('<img src="data:image/png;base64,%s" style="max-width:100%%;height:auto;">', base64enc::base64encode(tmp))
+  embed_widget(ggplotly(p, tooltip = "text", width = 500, height = 280))
 }
 
 # Verlaufsdiagramm eines Teams, Rest der Teams als grauer Kontext
 make_team_chart <- function(team_name) {
-  p <- ggplot(team_long, aes(Etappe, Kumuliert, group = Team)) +
-    geom_line(data = ~ filter(.x, Team != team_name), color = "grey80", linewidth = 0.5) +
-    geom_line(data = ~ filter(.x, Team == team_name), color = "#e6550d", linewidth = 1.4) +
-    geom_point(data = ~ filter(.x, Team == team_name), color = "#e6550d", size = 2) +
+  andere <- team_long %>% filter(Team != team_name)
+  eigenes <- team_long %>% filter(Team == team_name) %>%
+    mutate(txt = paste0(Team, "<br>", Etappe, ": ", Kumuliert, " Pkt"))
+
+  p <- ggplot() +
+    geom_line(data = andere, aes(Etappe, Kumuliert, group = Team), color = "grey80", linewidth = 0.5) +
+    geom_line(data = eigenes, aes(Etappe, Kumuliert, group = Team, text = txt), color = "#e6550d", linewidth = 1.4) +
+    geom_point(data = eigenes, aes(Etappe, Kumuliert, group = Team, text = txt), color = "#e6550d", size = 2) +
     labs(x = "Etappe", y = "Kumulierte Team-Punkte") +
     theme_minimal()
-  tmp <- tempfile(fileext = ".png")
-  on.exit(unlink(tmp), add = TRUE)
-  ggsave(tmp, p, width = 5.5, height = 3, dpi = 130, bg = "white")
-  sprintf('<img src="data:image/png;base64,%s" style="max-width:100%%;height:auto;">', base64enc::base64encode(tmp))
+  embed_widget(ggplotly(p, tooltip = "text", width = 550, height = 300))
 }
 
 # Baut das komplette Bootstrap-Modal (HTML) fuer einen Fahrer
@@ -340,6 +712,12 @@ build_rider_modal <- function(rider_name) {
   ex <- rider_extreme %>% filter(Rider == rider_name)
   picks <- teams_mit_summe %>% filter(Fahrer == rider_name) %>% pull(Spieler) %>% unique()
   picks_html <- if (length(picks) == 0) "Von niemandem getippt." else paste(sapply(sort(picks), player_link), collapse = ", ")
+  beliebtheit <- round(length(picks) / anzahl_spieler * 100)
+
+  teamkollege <- rider_extreme %>%
+    filter(Team == ex$Team, Rider != rider_name) %>%
+    slice_max(Gesamt, n = 1, with_ties = FALSE)
+  teamkollege_html <- if (nrow(teamkollege) == 0) "einziger Fahrer seines Teams in der Startliste" else sprintf("%s (%s Pkt)", rider_link(teamkollege$Rider), teamkollege$Gesamt)
 
   sprintf(paste0(
     '<div class="modal fade" id="rider-modal-%s" tabindex="-1" aria-hidden="true">\n',
@@ -359,8 +737,19 @@ build_rider_modal <- function(rider_name) {
     '<strong>Bester Tag:</strong> %s (%s Pkt) &middot;\n',
     '<strong>Schwächster Tag:</strong> %s (%s Pkt)\n',
     '</p>\n',
+    '<p>\n',
+    '<strong>Rang gesamt:</strong> %s von %s Fahrern &middot; ',
+    '<strong>Rang im Team:</strong> %s von %s &middot; ',
+    '<strong>Rang bei %s:</strong> %s von %s\n',
+    '</p>\n',
+    '<p>\n',
+    '<strong>Konsistenz (Streuung):</strong> %s Pkt &middot; ',
+    '<strong>Nullrunden:</strong> %s von %s Etappen ohne Punkte\n',
+    '</p>\n',
+    '<p><strong>Bester Team-Kollege:</strong> %s</p>\n',
     '%s\n',
-    '<p class="mt-3"><strong>Getippt von:</strong> %s</p>\n',
+    '<p class="mt-3"><strong>Beliebtheit:</strong> getippt von %s von %s Spieler:innen (%s%%)</p>\n',
+    '<p><strong>Getippt von:</strong> %s</p>\n',
     '</div>\n',
     '</div>\n',
     '</div>\n',
@@ -369,7 +758,14 @@ build_rider_modal <- function(rider_name) {
     slugify(rider_name), rider_display_name(rider_name),
     team_link(ex$Team), ex$Specialty, ex$Age, ex$BIB,
     ex$Gesamt, ex$Schnitt, ex$BesteEtappe, ex$BestePunkte, ex$SchlechtesteEtappe, ex$SchlechtestePunkte,
-    make_rider_chart(rider_name), picks_html
+    ex$RangGesamt, nrow(rider_extreme),
+    ex$RangTeam, ex$FahrerImTeam,
+    ex$Specialty, ex$RangSpecialty, ex$FahrerInSpecialty,
+    ex$Konsistenz, ex$Nullrunden, ex$Etappen,
+    teamkollege_html,
+    make_rider_chart(rider_name),
+    length(picks), anzahl_spieler, beliebtheit,
+    picks_html
   )
 }
 
@@ -388,7 +784,7 @@ build_team_modal <- function(team_name) {
   picks_html <- if (length(picks) == 0) "Niemand hat einen Fahrer aus diesem Team." else paste(sapply(sort(picks), player_link), collapse = ", ")
 
   tipper <- team_tipps %>% filter(Team == team_name) %>% pull(Spieler) %>% unique()
-  tipper_html <- if (length(tipper) == 0) "Niemand hat dieses Team fuer die Teamwertung getippt." else paste(sapply(sort(tipper), player_link), collapse = ", ")
+  tipper_html <- if (length(tipper) == 0) "Niemand hat dieses Team für die Teamwertung getippt." else paste(sapply(sort(tipper), player_link), collapse = ", ")
   teamwertung_punkte <- team_tipps %>% filter(Team == team_name) %>% pull(TeamPunkte) %>% unique()
   teamwertung_html <- if (length(teamwertung_punkte) == 0) "nicht getippt" else paste(teamwertung_punkte, collapse = "/")
 
@@ -402,7 +798,7 @@ build_team_modal <- function(team_name) {
     '</div>\n',
     '<div class="modal-body">\n',
     '<p>\n',
-    '<strong>Fahrer gesamt:</strong> %s Pkt (kumuliert ueber alle Fahrer) &middot; <strong>Schnitt/Etappe:</strong> %s Pkt &middot;\n',
+    '<strong>Fahrer gesamt:</strong> %s Pkt (kumuliert über alle Fahrer) &middot; <strong>Schnitt/Etappe:</strong> %s Pkt &middot;\n',
     '<strong>Bester Tag:</strong> %s (%s Pkt) &middot;\n',
     '<strong>Schwächster Tag:</strong> %s (%s Pkt)\n',
     '</p>\n',
@@ -431,6 +827,328 @@ build_team_modal <- function(team_name) {
     make_team_chart(team_name), roster, picks_html, tipper_html
   )
 }
+
+# Klickbarer Etappenname, oeffnet deren Detail-Modal.
+etappe_link <- function(name) {
+  sprintf(
+    '<a href="#" class="player-link" data-bs-toggle="modal" data-bs-target="#etappe-modal-%s">%s</a>',
+    slugify(name), name
+  )
+}
+
+# Kurzuebersicht je Etappe: Sieger und bestes Team (Basis fuer die
+# "Etappen"-Tabelle und den ersten Absatz jedes Etappen-Modals).
+etappe_extreme <- fahrer_long %>%
+  group_by(Etappe) %>%
+  slice_max(Punkte, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  select(Etappe, Sieger = Rider, SiegerPunkte = Punkte)
+
+etappe_bestes_team <- team_long %>%
+  group_by(Etappe) %>%
+  slice_max(Punkte, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  select(Etappe, BestesTeam = Team, BestesTeamPunkte = Punkte)
+
+# Balkendiagramm der Top-10-Fahrer einer Etappe
+make_etappe_chart <- function(etappe_name) {
+  p <- fahrer_long %>%
+    filter(Etappe == etappe_name) %>%
+    arrange(desc(Punkte)) %>%
+    slice_head(n = 10) %>%
+    mutate(
+      Rider = rider_display_name(Rider), Rider = factor(Rider, levels = rev(Rider)),
+      txt = paste0(Rider, ": ", Punkte, " Pkt")
+    ) %>%
+    ggplot(aes(Rider, Punkte, text = txt)) +
+    geom_col(fill = "#2c7fb8") +
+    coord_flip() +
+    labs(x = NULL, y = "Punkte") +
+    theme_minimal()
+  embed_widget(ggplotly(p, tooltip = "text", width = 550, height = 320))
+}
+
+# Balkendiagramm der Punkte-Verteilung nach Fahrer-Kategorie einer Etappe
+make_specialty_chart <- function(etappe_name) {
+  p <- fahrer_long %>%
+    filter(Etappe == etappe_name) %>%
+    group_by(Specialty) %>%
+    summarise(Punkte = sum(Punkte), .groups = "drop") %>%
+    mutate(txt = paste0(Specialty, ": ", Punkte, " Pkt")) %>%
+    ggplot(aes(reorder(Specialty, Punkte), Punkte, text = txt)) +
+    geom_col(fill = "#e6550d") +
+    coord_flip() +
+    labs(x = NULL, y = "Punkte") +
+    theme_minimal()
+  embed_widget(ggplotly(p, tooltip = "text", width = 450, height = 320))
+}
+
+# Baut das komplette Bootstrap-Modal (HTML) fuer eine Etappe
+build_etappe_modal <- function(etappe_name) {
+  etappe_num <- as.integer(str_extract(etappe_name, "\\d+"))
+
+  riders_stage <- fahrer_long %>% filter(Etappe == etappe_name) %>% arrange(desc(Punkte))
+  sieger <- riders_stage %>% slice(1)
+  team_stage <- team_long %>% filter(Etappe == etappe_name) %>% arrange(desc(Punkte))
+  bestes_team <- team_stage %>% slice(1)
+  dominante_specialty <- riders_stage %>%
+    group_by(Specialty) %>%
+    summarise(Punkte = sum(Punkte), .groups = "drop") %>%
+    slice_max(Punkte, n = 1, with_ties = FALSE)
+  altersschnitt_top10 <- round(mean(riders_stage$Age[1:10], na.rm = TRUE), 1)
+
+  bester_spieler <- stage_long %>% filter(EtappeNum == etappe_num) %>% slice_max(Punkte, n = 1, with_ties = FALSE)
+  bester_spieler_html <- if (nrow(bester_spieler) == 0) "keine Daten" else sprintf("%s (%s Pkt)", player_link(bester_spieler$Spieler), bester_spieler$Punkte)
+
+  aufsteiger <- rang_diff %>% filter(EtappeNum == etappe_num) %>% slice_max(Diff, n = 1, with_ties = FALSE)
+  absteiger <- rang_diff %>% filter(EtappeNum == etappe_num) %>% slice_min(Diff, n = 1, with_ties = FALSE)
+  if (nrow(aufsteiger) == 0 || aufsteiger$Diff <= 0) {
+    aufsteiger_html <- "niemand"
+  } else {
+    aufsteiger_html <- sprintf("%s (+%s Plätze)", player_link(aufsteiger$Spieler), aufsteiger$Diff)
+  }
+  if (nrow(absteiger) == 0 || absteiger$Diff >= 0) {
+    absteiger_html <- "niemand"
+  } else {
+    absteiger_html <- sprintf("%s (%s Plätze)", player_link(absteiger$Spieler), absteiger$Diff)
+  }
+
+  bester_pick <- teams_long_picks %>% filter(EtappeNum == etappe_num) %>% slice_max(PickPunkte, n = 1, with_ties = FALSE)
+  bester_pick_html <- if (nrow(bester_pick) == 0) "keine Daten" else sprintf("%s mit %s (%s Pkt)", player_link(bester_pick$Spieler), rider_link(bester_pick$Fahrer), bester_pick$PickPunkte)
+
+  top3anteil <- konzentration_pro_etappe %>% filter(Etappe == etappe_name) %>% pull(Top3Anteil)
+  konzentration_vergleich <- if (top3anteil > konzentration_schnitt) "enger als im Schnitt" else "konzentrierter als im Schnitt"
+
+  top10 <- riders_stage %>%
+    slice_head(n = 10) %>%
+    mutate(Rider = rider_link(Rider), Team = team_link(Team)) %>%
+    select(Rider, Team, Punkte) %>%
+    kable(format = "html", escape = FALSE, col.names = c("Fahrer", "Team", "Punkte"), table.attr = "class='table table-sm table-striped'")
+
+  top5_teams <- team_stage %>%
+    slice_head(n = 5) %>%
+    mutate(Team = team_link(Team)) %>%
+    select(Team, Punkte) %>%
+    kable(format = "html", escape = FALSE, col.names = c("Team", "Punkte"), table.attr = "class='table table-sm table-striped'")
+
+  sprintf(paste0(
+    '<div class="modal fade" id="etappe-modal-%s" tabindex="-1" aria-hidden="true">\n',
+    '<div class="modal-dialog modal-lg modal-dialog-scrollable">\n',
+    '<div class="modal-content">\n',
+    '<div class="modal-header">\n',
+    '<h5 class="modal-title">%s</h5>\n',
+    '<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>\n',
+    '</div>\n',
+    '<div class="modal-body">\n',
+    '<p>\n',
+    '<strong>Etappensieger:</strong> %s (%s Pkt) &middot; ',
+    '<strong>Bestes Team:</strong> %s (%s Pkt)\n',
+    '</p>\n',
+    '<p>\n',
+    '<strong>Punkte insgesamt verteilt:</strong> %s &middot; ',
+    '<strong>Fahrer mit Punkten:</strong> %s von %s &middot; ',
+    '<strong>Stärkste Kategorie:</strong> %s (%s Pkt) &middot; ',
+    '<strong>Altersschnitt Top 10:</strong> %s Jahre\n',
+    '</p>\n',
+    '<p>\n',
+    '<strong>Bester Spieler:innen-Tipp des Tages:</strong> %s &middot; ',
+    '<strong>Größter Aufsteiger:</strong> %s &middot; ',
+    '<strong>Größter Absteiger:</strong> %s\n',
+    '</p>\n',
+    '<p><strong>Bester Einzel-Pick des Tages:</strong> %s</p>\n',
+    '<p><strong>Konzentration:</strong> Top-3-Fahrer holten %.0f%% aller Punkte ',
+    'dieser Etappe (Schnitt aller Etappen: %.0f%%) -- %s.</p>\n',
+    '<div class="row mt-3">\n',
+    '<div class="col-md-6">\n',
+    '<h6>Top 10 Fahrer</h6>\n',
+    '%s\n',
+    '%s\n',
+    '</div>\n',
+    '<div class="col-md-6">\n',
+    '<h6>Punkte nach Kategorie</h6>\n',
+    '%s\n',
+    '</div>\n',
+    '</div>\n',
+    '<h6 class="mt-3">Top 5 Teams</h6>\n',
+    '%s\n',
+    '</div>\n',
+    '</div>\n',
+    '</div>\n',
+    '</div>'
+  ),
+    slugify(etappe_name), etappe_name,
+    rider_link(sieger$Rider), sieger$Punkte,
+    team_link(bestes_team$Team), bestes_team$Punkte,
+    sum(riders_stage$Punkte), sum(riders_stage$Punkte > 0), nrow(riders_stage),
+    dominante_specialty$Specialty, dominante_specialty$Punkte,
+    altersschnitt_top10,
+    bester_spieler_html, aufsteiger_html, absteiger_html,
+    bester_pick_html,
+    top3anteil, konzentration_schnitt, konzentration_vergleich,
+    make_etappe_chart(etappe_name), top10,
+    make_specialty_chart(etappe_name),
+    top5_teams
+  )
+}
+
+# Baut das komplette Bootstrap-Modal (HTML) fuer das budget-optimale Team
+# einer Etappe (siehe optimales_team_pro_etappe / optimal_team()).
+# Verlaufsdiagramm des Kanter-Kaders, alle echten Spieler als grauer Kontext
+# -- gleiches Muster wie make_player_chart/make_team_chart.
+# Verlaufsdiagramm des Kanter-Kaders EINER bestimmten Etappe: zeigt nur
+# dessen eigene 15 Fahrer (+ ggf. Team-Tipp), deren kumulierte Punkte ueber
+# genau die Etappen bis dahin -- NICHT die je Etappe wechselnden Teams
+# vermischt (das waere irrefuehrend, siehe Kommentar bei opt_gesamt_pro_etappe).
+make_optimal_team_chart <- function(etappe_name) {
+  ot <- optimales_team_pro_etappe[[etappe_name]]
+  riders_hier <- ot$Rider
+  team_hier <- ot$OptTeam[1]
+  etappe_num_max <- as.integer(str_extract(etappe_name, "\\d+"))
+
+  eigene <- fahrer_long %>%
+    filter(Rider %in% riders_hier) %>%
+    group_by(Etappe) %>%
+    summarise(RiderPunkte = sum(Kumuliert), .groups = "drop") %>%
+    mutate(EtappeNum = as.integer(str_extract(as.character(Etappe), "\\d+"))) %>%
+    filter(EtappeNum <= etappe_num_max) %>%
+    left_join(
+      if (is.na(team_hier)) {
+        tibble(EtappeNum = integer(), TeamPunkte = double())
+      } else {
+        team_score_long %>% filter(Team == team_hier) %>% select(EtappeNum, TeamPunkte = Kumuliert)
+      },
+      by = "EtappeNum"
+    ) %>%
+    arrange(EtappeNum) %>%
+    mutate(
+      Kumuliert = RiderPunkte + coalesce(TeamPunkte, 0),
+      # gleiche Etappen-Beschriftung wie stage_long ("S 01" statt "S01"),
+      # damit der graue Kontext (echte Spieler) auf derselben x-Achse liegt.
+      EtappeLabel = factor(levels(stage_long$Etappe)[EtappeNum], levels = levels(stage_long$Etappe)),
+      txt = paste0("Kanter-Kader<br>", EtappeLabel, ": ", Kumuliert, " Pkt")
+    )
+
+  p <- ggplot() +
+    geom_line(data = stage_long, aes(Etappe, Kumuliert, group = Spieler), color = "grey80", linewidth = 0.5) +
+    geom_line(data = eigene, aes(EtappeLabel, Kumuliert, group = 1, text = txt), color = "#2c7fb8", linewidth = 1.4) +
+    geom_point(data = eigene, aes(EtappeLabel, Kumuliert, group = 1, text = txt), color = "#2c7fb8", size = 2) +
+    labs(x = "Etappe", y = "Kumulierte Punkte") +
+    theme_minimal()
+  embed_widget(ggplotly(p, tooltip = "text", width = 550, height = 300))
+}
+
+# Punkte des fuer GENAU DIESE Etappe optimierten Kanter-Kaders, marginal
+# (nicht kumuliert) je einzelner Etappe bis dahin -- Basis fuer
+# Schnitt/Bester/Schwaechster Tag und die "Punkte je Etappe"-Tabelle in
+# dessen Modal. Bewusst getrennt von opt_delta_pro_etappe (globale
+# Fixed-S09-Referenz) -- sonst zeigt das Modal Zahlen eines ANDEREN Teams.
+kanter_kader_etappen_punkte <- function(etappe_name) {
+  ot <- optimales_team_pro_etappe[[etappe_name]]
+  riders_hier <- ot$Rider
+  team_hier <- ot$OptTeam[1]
+  etappe_num_max <- as.integer(str_extract(etappe_name, "\\d+"))
+
+  team_marginal <- if (is.na(team_hier)) {
+    tibble(EtappeNum = integer(), TeamPunkte = double())
+  } else {
+    team_score_long %>% filter(Team == team_hier) %>% select(EtappeNum, TeamPunkte = Punkte)
+  }
+
+  fahrer_long %>%
+    filter(Rider %in% riders_hier) %>%
+    group_by(Etappe) %>%
+    summarise(RiderPunkte = sum(Punkte), .groups = "drop") %>%
+    mutate(EtappeNum = as.integer(str_extract(as.character(Etappe), "\\d+"))) %>%
+    filter(EtappeNum <= etappe_num_max) %>%
+    left_join(team_marginal, by = "EtappeNum") %>%
+    arrange(EtappeNum) %>%
+    transmute(Etappe = as.character(Etappe), Punkte = RiderPunkte + coalesce(TeamPunkte, 0))
+}
+
+build_optimal_team_modal <- function(etappe_name) {
+  ot <- optimales_team_pro_etappe[[etappe_name]]
+  tbl <- ot %>%
+    mutate(Rider = rider_link(Rider), Team = team_link(Team)) %>%
+    select(Rider, Team, Rating, Punkte) %>%
+    kable(format = "html", escape = FALSE, col.names = c("Fahrer", "Team", "Kosten", "Punkte"), table.attr = "class='table table-sm table-striped'") %>%
+    mark_best_value_row(ot$Punkte, ot$Rating)
+
+  eigene_etappen_punkte <- kanter_kader_etappen_punkte(etappe_name)
+  punkte_hist <- eigene_etappen_punkte %>%
+    kable(format = "html", col.names = c("Etappe", "Punkte"), table.attr = "class='table table-sm table-striped'")
+
+  team_tipp_html <- if (is.na(ot$OptTeam[1])) {
+    "keiner (bringt weniger Punkte pro Kosten als die Fahrer)"
+  } else {
+    sprintf("%s (Kosten %s, %s Pkt Teamwertung)", team_link(ot$OptTeam[1]), ot$OptTeamRating[1], ot$OptTeamPunkte[1])
+  }
+
+  genutzte_slots <- nrow(ot)
+  budget_uebrig <- 560 - ot$GesamtKosten[1]
+  team_vielfalt <- n_distinct(ot$Team)
+  bester_value <- ot %>% filter(Rating > 0) %>% slice_max(Punkte / Rating, n = 1, with_ties = FALSE)
+  bester_value_html <- if (nrow(bester_value) == 0) "-" else sprintf("%s (%.2f Pkt/Kosten-Punkt)", rider_link(bester_value$Rider), bester_value$Punkte / bester_value$Rating)
+
+  etappe_num <- as.integer(str_extract(etappe_name, "\\d+"))
+  schnitt_etappe <- round(mean(eigene_etappen_punkte$Punkte), 1)
+  bester_opt_tag <- eigene_etappen_punkte %>% slice_max(Punkte, n = 1, with_ties = FALSE)
+  schlechtester_opt_tag <- eigene_etappen_punkte %>% slice_min(Punkte, n = 1, with_ties = FALSE)
+
+  bester_spieler_tag <- if (etappe_num <= nlevels(stage_long$Etappe)) {
+    stage_long %>% filter(Etappe == levels(stage_long$Etappe)[etappe_num]) %>% slice_max(Kumuliert, n = 1, with_ties = FALSE)
+  } else {
+    stage_long[0, ]
+  }
+  vorsprung_html <- if (nrow(bester_spieler_tag) == 0) {
+    "keine Vergleichsdaten"
+  } else {
+    sprintf("+%s Pkt vor %s (%s Pkt)", ot$GesamtPunkte[1] - bester_spieler_tag$Kumuliert, player_link(bester_spieler_tag$Spieler), bester_spieler_tag$Kumuliert)
+  }
+
+  sprintf(paste0(
+    '<div class="modal fade" id="opt-modal-%s" tabindex="-1" aria-hidden="true">\n',
+    '<div class="modal-dialog modal-lg modal-dialog-scrollable">\n',
+    '<div class="modal-content">\n',
+    '<div class="modal-header">\n',
+    '<h5 class="modal-title">Kanter-Kader nach %s</h5>\n',
+    '<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>\n',
+    '</div>\n',
+    '<div class="modal-body">\n',
+    '<p><strong>Gesamt:</strong> %s Pkt &middot; <strong>Kosten:</strong> %s von 560 (%s übrig)</p>\n',
+    '<p><strong>Schnitt/Etappe:</strong> %s Pkt &middot; ',
+    '<strong>Bester Tag:</strong> %s (%s Pkt) &middot; ',
+    '<strong>Schwächster Tag:</strong> %s (%s Pkt)</p>\n',
+    '<p><strong>Team-Tipp:</strong> %s</p>\n',
+    '<p><strong>Fahrer-Slots genutzt:</strong> %s von 15 &middot; ',
+    '<strong>Teams vertreten:</strong> %s &middot; ',
+    '<strong>Bester Value-Pick:</strong> %s</p>\n',
+    '<p><strong>Vorsprung ggü. bestem echten Spieler:in an dem Tag:</strong> %s</p>\n',
+    '%s\n',
+    '<div class="row mt-3">\n',
+    '<div class="col-md-6">\n',
+    '<h6>Punkte je Etappe</h6>\n',
+    '%s\n',
+    '</div>\n',
+    '<div class="col-md-6">\n',
+    '<h6>Fahrer</h6>\n',
+    '%s\n',
+    '</div>\n',
+    '</div>\n',
+    '</div>\n',
+    '</div>\n',
+    '</div>\n',
+    '</div>'
+  ),
+    slugify(etappe_name), etappe_name,
+    ot$GesamtPunkte[1], ot$GesamtKosten[1], budget_uebrig,
+    schnitt_etappe, bester_opt_tag$Etappe, bester_opt_tag$Punkte, schlechtester_opt_tag$Etappe, schlechtester_opt_tag$Punkte,
+    team_tipp_html,
+    genutzte_slots, team_vielfalt, bester_value_html,
+    vorsprung_html,
+    make_optimal_team_chart(etappe_name),
+    punkte_hist, tbl
+  )
+}
 ```
 
 ## Tour de France 2026 Tipico für Arme
@@ -454,23 +1172,39 @@ Punktestand aktuell nach `r ncol(stage)-1` von 21 Etappen.
 total_display <- total %>%
   left_join(rang_trend, by = "Name") %>%
   arrange(desc(Summe)) %>%
-  mutate(NameSort = Name, Name = player_link(NameSort)) %>%
-  select(Name, Trend, Summe, NameSort)
+  mutate(Rang = row_number(), NameSort = Name, Name = player_link(NameSort)) %>%
+  select(Rang, Name, Trend, Summe, NameSort)
 
-# +1: datatable() prepends its own rownames column at index 0
-name_spalte <- which(names(total_display) == "Name")
-summe_spalte <- which(names(total_display) == "Summe")
-namesort_spalte <- which(names(total_display) == "NameSort")
+# Das rein hypothetische, budget-optimale Team taucht als virtuelle Zeile mit
+# Rang 0 mit auf -- Trend nicht sinnvoll (kein echter Spieler-Rang-Sprung).
+letzte_etappe_slug <- slugify(tail(levels(fahrer_long$Etappe), 1))
+optimal_team_zeile <- tibble(
+  Rang = 0,
+  Name = sprintf('<a href="#" class="player-link" data-bs-toggle="modal" data-bs-target="#opt-modal-%s">Kanter-Kader</a>', letzte_etappe_slug),
+  Trend = "–",
+  Summe = tail(opt_gesamt_pro_etappe$OptGesamtPunkte, 1),
+  NameSort = "Kanter-Kader"
+)
+total_display <- bind_rows(optimal_team_zeile, total_display)
+
+# rownames = FALSE: sonst zeigt DT zusaetzlich zu unserer Rang-Spalte noch
+# seine eigene automatische Zeilennummer -- doppelt gemoppelt.
+rang_spalte <- which(names(total_display) == "Rang") - 1
+name_spalte <- which(names(total_display) == "Name") - 1
+namesort_spalte <- which(names(total_display) == "NameSort") - 1
 
 datatable(total_display,
           escape = FALSE,
+          rownames = FALSE,
           options = list(
-            pageLength = 17,
-            order = list(list(summe_spalte, "desc")),
+            pageLength = 18,
+            order = list(list(rang_spalte, "asc")),
             columnDefs = list(
+              list(targets = rang_spalte, width = "60px"),
               list(targets = name_spalte, orderData = namesort_spalte),
               list(targets = namesort_spalte, visible = FALSE)
-            )
+            ),
+            rowCallback = kanter_kader_row_callback
           )
           )
 ```
@@ -486,18 +1220,119 @@ datatable(total_display,
 
 stage_display <- stage %>%
   rename(Spieler = 1) %>%
-  mutate(SpielerSort = Spieler, Spieler = player_link(SpielerSort))
+  left_join(total, by = c("Spieler" = "Name")) %>%
+  arrange(desc(Summe)) %>%
+  mutate(Rang = row_number(), SpielerSort = Spieler, Spieler = player_link(SpielerSort)) %>%
+  select(-Summe)
 
-spieler_spalte <- which(names(stage_display) == "Spieler")
-spielersort_spalte <- which(names(stage_display) == "SpielerSort")
+# Etappen-Delta des optimalen Teams als virtuelle Zeile mit Rang 0 -- gleiche
+# Anzahl Etappen-Spalten wie im "stage"-Sheet vorausgesetzt (S 01, S 02, ...).
+stage_spaltennamen <- names(stage)[-1]
+opt_werte <- opt_delta_pro_etappe$OptPunkte[seq_len(min(length(stage_spaltennamen), nrow(opt_delta_pro_etappe)))]
+optimal_team_zeile_stage <- tibble(
+  Rang = 0,
+  Spieler = sprintf('<a href="#" class="player-link" data-bs-toggle="modal" data-bs-target="#opt-modal-%s">Kanter-Kader</a>', letzte_etappe_slug),
+  SpielerSort = "Kanter-Kader"
+) %>%
+  bind_cols(as_tibble(setNames(as.list(opt_werte), stage_spaltennamen[seq_along(opt_werte)])))
+
+stage_display <- bind_rows(optimal_team_zeile_stage, stage_display) %>%
+  select(Rang, Spieler, all_of(stage_spaltennamen), SpielerSort)
+
+rang_spalte <- which(names(stage_display) == "Rang") - 1
+spieler_spalte <- which(names(stage_display) == "Spieler") - 1
+spielersort_spalte <- which(names(stage_display) == "SpielerSort") - 1
 
 datatable(stage_display,
           escape = FALSE,
+          rownames = FALSE,
+          colnames = c("Spieler:innen" = "Spieler"),
           options = list(
-            pageLength = 17,
+            pageLength = 18,
+            order = list(list(rang_spalte, "asc")),
             columnDefs = list(
+              list(targets = rang_spalte, width = "60px"),
               list(targets = spieler_spalte, orderData = spielersort_spalte),
               list(targets = spielersort_spalte, visible = FALSE)
+            ),
+            rowCallback = kanter_kader_row_callback
+          )
+          )
+```
+
+## Etappen
+
+Klick auf eine Etappe für Sieger, bestes Team, Top 10 und mehr.
+
+```{r}
+#| eval: true
+#| echo: false
+#| include: true
+
+etappen_display <- etappe_extreme %>%
+  left_join(etappe_bestes_team, by = "Etappe") %>%
+  mutate(
+    EtappeSort = as.character(Etappe), Etappe = etappe_link(EtappeSort),
+    SiegerSort = Sieger, Sieger = rider_link(SiegerSort),
+    BestesTeamSort = BestesTeam, BestesTeam = team_link(BestesTeamSort),
+    OptimalesTeam = sprintf('<a href="#" class="player-link" data-bs-toggle="modal" data-bs-target="#opt-modal-%s">Details</a>', slugify(EtappeSort))
+  ) %>%
+  select(Etappe, Sieger, SiegerPunkte, BestesTeam, BestesTeamPunkte, OptimalesTeam, EtappeSort, SiegerSort, BestesTeamSort)
+
+etappe_spalte <- which(names(etappen_display) == "Etappe")
+etappesort_spalte <- which(names(etappen_display) == "EtappeSort")
+sieger_spalte <- which(names(etappen_display) == "Sieger")
+siegersort_spalte <- which(names(etappen_display) == "SiegerSort")
+bestesteam_spalte <- which(names(etappen_display) == "BestesTeam")
+bestesteamsort_spalte <- which(names(etappen_display) == "BestesTeamSort")
+
+datatable(etappen_display,
+          escape = FALSE,
+          colnames = c("Etappe", "Sieger", "Sieger-Punkte", "Bestes Team", "Team-Punkte", "Kanter-Kader", "EtappeSort", "SiegerSort", "BestesTeamSort"),
+          options = list(
+            pageLength = 21,
+            columnDefs = list(
+              list(targets = etappe_spalte, orderData = etappesort_spalte),
+              list(targets = etappesort_spalte, visible = FALSE),
+              list(targets = sieger_spalte, orderData = siegersort_spalte),
+              list(targets = siegersort_spalte, visible = FALSE),
+              list(targets = bestesteam_spalte, orderData = bestesteamsort_spalte),
+              list(targets = bestesteamsort_spalte, visible = FALSE)
+            )
+          )
+          )
+```
+
+## Kanter-Kader
+
+::: {.callout-tip}
+**Hätte man die Etappenresultate davor schon gekantert, wäre das der einzig
+wahre Kanter.**
+:::
+
+```{r}
+#| eval: true
+#| echo: false
+#| include: true
+
+optimales_team_uebersicht <- purrr::map_dfr(optimales_team_pro_etappe, ~ .x %>% slice(1)) %>%
+  select(Etappe, GesamtPunkte, GesamtKosten) %>%
+  mutate(
+    EtappeSort = as.character(Etappe), Etappe = etappe_link(EtappeSort),
+    Details = sprintf('<a href="#" class="player-link" data-bs-toggle="modal" data-bs-target="#opt-modal-%s">Details</a>', slugify(EtappeSort))
+  )
+
+etappe_spalte <- which(names(optimales_team_uebersicht) == "Etappe")
+etappesort_spalte <- which(names(optimales_team_uebersicht) == "EtappeSort")
+
+datatable(optimales_team_uebersicht,
+          escape = FALSE,
+          colnames = c("Etappe", "Punkte", "Kosten", "EtappeSort", "Details"),
+          options = list(
+            pageLength = 21,
+            columnDefs = list(
+              list(targets = etappe_spalte, orderData = etappesort_spalte),
+              list(targets = etappesort_spalte, visible = FALSE)
             )
           )
           )
@@ -505,23 +1340,34 @@ datatable(stage_display,
 
 ## Punkteverlauf
 
-Kumulierte Punkte pro Spieler über die Etappen.
+Kumulierte Punkte pro Spieler:in über die Etappen.
 
 ```{r}
 #| eval: true
 #| echo: false
 #| include: true
 
-p <- ggplot(
-  stage_long,
-  aes(
-    x = Etappe, y = Kumuliert, color = Spieler, group = Spieler,
-    text = paste0(Spieler, "<br>", Etappe, ": ", Kumuliert, " Pkt")
-  )
-) +
-  geom_line() +
-  geom_point(size = 1.5) +
-  labs(x = "Etappe", y = "Kumulierte Punkte", color = "Spieler") +
+p <- ggplot() +
+  geom_line(
+    data = stage_long,
+    aes(Etappe, Kumuliert, color = Spieler, group = Spieler, text = paste0(Spieler, "<br>", Etappe, ": ", Kumuliert, " Pkt"))
+  ) +
+  geom_point(
+    data = stage_long,
+    aes(Etappe, Kumuliert, color = Spieler, group = Spieler, text = paste0(Spieler, "<br>", Etappe, ": ", Kumuliert, " Pkt")),
+    size = 1.5
+  ) +
+  geom_line(
+    data = opt_line_data,
+    aes(Etappe, Kumuliert, group = Spieler, text = paste0("Kanter-Kader<br>", Etappe, ": ", Kumuliert, " Pkt")),
+    color = "black", linetype = "dashed", linewidth = 1.2
+  ) +
+  geom_point(
+    data = opt_line_data,
+    aes(Etappe, Kumuliert, group = Spieler, text = paste0("Kanter-Kader<br>", Etappe, ": ", Kumuliert, " Pkt")),
+    color = "black", size = 2
+  ) +
+  labs(x = "Etappe", y = "Kumulierte Punkte", color = "Spieler:in") +
   theme_minimal()
 
 ggplotly(p, tooltip = "text")
@@ -536,6 +1382,8 @@ ggplotly(p, tooltip = "text")
 
 teams_display <- teams %>%
   filter(!(Fahrer %in% startlist$Team)) %>%
+  left_join(rider_budget, by = c("Fahrer" = "Rider")) %>%
+  relocate(Rating, .after = Fahrer) %>%
   mutate(
     SpielerSort = Spieler, Spieler = player_link(SpielerSort),
     FahrerSort = Fahrer, Fahrer = rider_link(FahrerSort)
@@ -549,6 +1397,7 @@ fahrersort_spalte <- which(names(teams_display) == "FahrerSort")
 datatable(teams_display,
   escape = FALSE,
   filter = "top",
+  colnames = c("Spieler:innen" = "Spieler", "Fahrer" = "Fahrer", "Kosten" = "Rating"),
   options = list(
     pageLength = 16,
     columnDefs = list(
@@ -563,19 +1412,19 @@ datatable(teams_display,
 
 ## Beste Picks
 
-Welcher Fahrer hat seinem Spieler bisher die meisten Punkte gebracht.
+Welcher Fahrer hat dem jeweiligen Spieler:in bisher die meisten Punkte gebracht.
 
 ```{r}
 #| eval: true
 #| echo: false
 #| include: true
 
-beste_picks <- teams_mit_summe %>%
+beste_picks <- teams_mit_summe_mit_rating %>%
   group_by(Spieler) %>%
   slice_max(FahrerPunkte, n = 1, with_ties = FALSE) %>%
   ungroup() %>%
   arrange(desc(FahrerPunkte)) %>%
-  select(Spieler, Fahrer, FahrerPunkte) %>%
+  select(Spieler, Fahrer, Rating, FahrerPunkte) %>%
   mutate(
     SpielerSort = Spieler, Spieler = player_link(SpielerSort),
     FahrerSort = Fahrer, Fahrer = rider_link(FahrerSort)
@@ -589,6 +1438,7 @@ fahrerpunkte_spalte <- which(names(beste_picks) == "FahrerPunkte")
 
 datatable(beste_picks,
           escape = FALSE,
+          colnames = c("Spieler:innen" = "Spieler", "Kosten" = "Rating"),
           options = list(
             pageLength = 50,
             order = list(list(fahrerpunkte_spalte, "desc")),
@@ -604,7 +1454,7 @@ datatable(beste_picks,
 
 ## Team-Tipps
 
-Wer hat welches Team fuer die Teamwertung getippt.
+Wer hat welches Team für die Teamwertung getippt.
 
 ```{r}
 #| eval: true
@@ -626,6 +1476,7 @@ teampunkte_spalte <- which(names(team_tipps_display) == "TeamPunkte")
 
 datatable(team_tipps_display,
           escape = FALSE,
+          colnames = c("Spieler:innen" = "Spieler"),
           options = list(
             pageLength = 16,
             order = list(list(teampunkte_spalte, "desc")),
@@ -650,7 +1501,15 @@ Einfach mal checken welcher Fahrer wann wie viele Punkte geholt hat.
 
 startlist_display <- startlist %>%
   mutate(
-    RiderSort = Rider, Rider = rider_link(RiderSort),
+    RiderSort = Rider,
+    Rider = if_else(
+      RiderSort %in% optimales_team_aktuell,
+      paste0(
+        rider_link(RiderSort),
+        sprintf(' <a href="#" data-bs-toggle="modal" data-bs-target="#opt-modal-%s"><span class="badge bg-success">Kanter-Kader</span></a>', letzte_etappe_slug)
+      ),
+      rider_link(RiderSort)
+    ),
     TeamSort = Team, Team = team_link(TeamSort)
   )
 
@@ -672,6 +1531,93 @@ datatable(startlist_display,
           )
           )
 ```
+
+## Kategorien
+
+Ranking je Fahrer-Kategorie (Sprint, Climber, GC, ...).
+
+```{r}
+#| eval: true
+#| echo: false
+#| include: true
+
+kategorien_uebersicht <- rider_extreme_mit_rating %>%
+  group_by(Specialty) %>%
+  summarise(
+    AnzahlFahrer = n(),
+    GesamtPunkte = sum(Gesamt),
+    SchnittPunkte = round(mean(Gesamt), 1),
+    .groups = "drop"
+  ) %>%
+  left_join(
+    rider_extreme_mit_rating %>%
+      filter(RangSpecialty == 1) %>%
+      transmute(Specialty, BesterFahrer = Rider, BesterFahrerPunkte = Gesamt, BestesTeam = Team),
+    by = "Specialty"
+  ) %>%
+  arrange(desc(GesamtPunkte)) %>%
+  mutate(
+    BesterFahrer = rider_link(BesterFahrer),
+    BestesTeam = team_link(BestesTeam)
+  )
+
+datatable(kategorien_uebersicht,
+          escape = FALSE,
+          colnames = c(
+            "Kategorie" = "Specialty", "Fahrer" = "AnzahlFahrer", "Punkte gesamt" = "GesamtPunkte",
+            "Schnitt/Fahrer" = "SchnittPunkte", "Kategoriesieger" = "BesterFahrer",
+            "Punkte" = "BesterFahrerPunkte", "Team" = "BestesTeam"
+          ),
+          options = list(pageLength = 6, dom = "t")
+          )
+```
+
+Alle Fahrer je Kategorie im Detail, inklusive Kosten und Punkte-pro-Kosten-Wert.
+
+```{r}
+#| eval: true
+#| echo: false
+#| include: true
+
+kategorien_display <- rider_extreme_mit_rating %>%
+  arrange(Specialty, RangSpecialty) %>%
+  mutate(
+    RiderSort = Rider, Rider = rider_link(RiderSort),
+    TeamSort = Team, Team = team_link(TeamSort)
+  ) %>%
+  select(
+    Specialty, RangSpecialty, Rider, Team, Rating, Gesamt, Schnitt,
+    Konsistenz, Nullrunden, BesteEtappe, BestePunkte, Value, RiderSort, TeamSort
+  )
+
+rang_spalte_kat <- which(names(kategorien_display) == "RangSpecialty") - 1
+rider_spalte_kat <- which(names(kategorien_display) == "Rider") - 1
+ridersort_spalte_kat <- which(names(kategorien_display) == "RiderSort") - 1
+team_spalte_kat <- which(names(kategorien_display) == "Team") - 1
+teamsort_spalte_kat <- which(names(kategorien_display) == "TeamSort") - 1
+
+datatable(kategorien_display,
+          escape = FALSE,
+          rownames = FALSE,
+          filter = "top",
+          colnames = c(
+            "Kategorie" = "Specialty", "Rang" = "RangSpecialty", "Fahrer" = "Rider", "Team" = "Team",
+            "Kosten" = "Rating", "Gesamt" = "Gesamt", "Schnitt/Etappe" = "Schnitt",
+            "Konsistenz" = "Konsistenz", "Nullrunden" = "Nullrunden", "Bester Tag" = "BesteEtappe",
+            "Bester-Tag-Punkte" = "BestePunkte", "Pkt/Kosten" = "Value"
+          ),
+          options = list(
+            pageLength = 25,
+            order = list(list(rang_spalte_kat, "asc")),
+            columnDefs = list(
+              list(targets = rider_spalte_kat, orderData = ridersort_spalte_kat),
+              list(targets = ridersort_spalte_kat, visible = FALSE),
+              list(targets = team_spalte_kat, orderData = teamsort_spalte_kat),
+              list(targets = teamsort_spalte_kat, visible = FALSE)
+            )
+          )
+          )
+```
 :::
 
 ```{=html}
@@ -684,10 +1630,21 @@ document.addEventListener('shown.bs.tab', function () {
     jQuery.fn.dataTable.tables({ visible: true, api: true }).columns.adjust();
   }
 });
+
+// Plotly-Charts in Bootstrap-Modals werden bei Modal-Oeffnung (vorher
+// display:none, also Breite 0) initialisiert und bleiben deshalb leer/falsch
+// dimensioniert. Beim Oeffnen jedes Modals dessen Plotly-Charts neu
+// zeichnen lassen.
+document.addEventListener('shown.bs.modal', function (e) {
+  if (!window.Plotly) return;
+  e.target.querySelectorAll('.js-plotly-plot').forEach(function (el) {
+    Plotly.Plots.resize(el);
+  });
+});
 </script>
 ```
 
-Klick auf einen Namen, Fahrer oder Team zeigt jeweils Punkteverlauf, Historie und weitere Stats im Detail.
+Klick auf einen Namen, Fahrer, Team oder eine Etappe zeigt jeweils Punkteverlauf, Historie und weitere Stats im Detail. Gelb markierte Fahrer haben das beste Punkte-pro-Kosten-Verhältnis in ihrem Kader (Erklärung beim Drüberhovern).
 
 ```{r}
 #| echo: false
@@ -697,4 +1654,6 @@ Klick auf einen Namen, Fahrer oder Team zeigt jeweils Punkteverlauf, Historie un
 cat(paste(sapply(sort(unique(total$Name)), build_player_modal), collapse = "\n"))
 cat(paste(sapply(sort(unique(startlist$Rider)), build_rider_modal), collapse = "\n"))
 cat(paste(sapply(sort(unique(startlist$Team)), build_team_modal), collapse = "\n"))
+cat(paste(sapply(levels(fahrer_long$Etappe), build_etappe_modal), collapse = "\n"))
+cat(paste(sapply(levels(fahrer_long$Etappe), build_optimal_team_modal), collapse = "\n"))
 ```
