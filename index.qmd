@@ -443,8 +443,7 @@ have Fun in the sun.
 Punktestand aktuell nach `r ncol(stage)-1` von 21 Etappen.
 :::
 
-::: {.panel-tabset}
-
+::: panel-tabset
 ## Gesamtstand
 
 ```{r}
@@ -591,7 +590,7 @@ fahrerpunkte_spalte <- which(names(beste_picks) == "FahrerPunkte")
 datatable(beste_picks,
           escape = FALSE,
           options = list(
-            pageLength = 16,
+            pageLength = 50,
             order = list(list(fahrerpunkte_spalte, "desc")),
             columnDefs = list(
               list(targets = spieler_spalte, orderData = spielersort_spalte),
@@ -673,7 +672,6 @@ datatable(startlist_display,
           )
           )
 ```
-
 :::
 
 ```{=html}
@@ -689,8 +687,7 @@ document.addEventListener('shown.bs.tab', function () {
 </script>
 ```
 
-Klick auf einen Namen, Fahrer oder Team zeigt jeweils Punkteverlauf, Historie
-und weitere Stats im Detail.
+Klick auf einen Namen, Fahrer oder Team zeigt jeweils Punkteverlauf, Historie und weitere Stats im Detail.
 
 ```{r}
 #| echo: false
