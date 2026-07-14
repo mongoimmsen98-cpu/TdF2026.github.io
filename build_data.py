@@ -27,11 +27,25 @@ Roh-Eingaben, die gepflegt werden (alles andere wird berechnet):
   - "Spieler_Teams"    Spalte A/B: welcher Spieler tippt welche Fahrer + 1 Team
   - "Startlist2026"    Fahrer-Stammdaten (BIB, Specialty, Age, Rider, Team)
   - "Quotes"           Teamfunk / Trash-Talk (Spalten: Spieler, Spruch)
+  - "RIderPoints.csv"  Fahrer-/Team-Kosten (Budget fuers Kanter-Kader, s.u.)
+
+Kanter-Kader: das budget-optimale Team, das man mit dem Wissen bis zu einer
+Etappe haette zusammenstellen koennen (<=560 Kosten aus RIderPoints.csv,
+<=15 Fahrer + hoechstens 1 optionaler Team-Tipp). Wird hier als 0/1-Rucksack
+geloest (Portierung von optimal_team()/optimal_team_full() aus index.qmd).
 """
 
+import csv
+import itertools
+import json
+import os
 import re
 import sys
+import time
 import unicodedata
+import urllib.error
+import urllib.parse
+import urllib.request
 from collections import defaultdict
 from pathlib import Path
 
@@ -42,7 +56,10 @@ except ImportError:
 
 ROOT = Path(__file__).resolve().parent
 XLSX = ROOT / "tdf_tippspiel_master.xlsx"
+COSTS_CSV = ROOT / "RIderPoints.csv"
 OUT = ROOT / "data.js"
+PHOTO_CACHE_FILE = ROOT / ".rider_photos_cache.json"
+WIKIPEDIA_API = "https://en.wikipedia.org/w/api.php"
 
 # Gesamtzahl Etappen der Tour. Wie viele bereits gefahren sind, ergibt sich
 # automatisch aus den befüllten Etappen-Spalten in 'Ergebnisse_Roh'.
@@ -100,6 +117,224 @@ def stage_columns(ws, header_row=1):
         if isinstance(v, str) and re.match(r"^\s*(S|Stage)\s*0*\d+\s*$", v):
             cols.append(c)
     return cols
+
+
+# --------------------------------------------------------------------------
+# Fahrerfotos: Wikipedia-"Page Image" (dieselbe Vorschau, die auch Infobox/
+# Linkvorschau nutzt), gefunden per Volltextsuche statt exaktem Titel — unsere
+# Fahrernamen stehen als "Nachname Vorname" (siehe split_rider_name), waehrend
+# Wikipedia-Artikel unter "Vorname Nachname" laufen; die Suche ist tolerant
+# gegenueber der Reihenfolge. Mit lokalem Cache, damit nicht bei jedem Build
+# erneut angefragt wird (und es auch offline funktioniert, sobald gefuellt).
+# Kein/falscher Treffer -> None, dann zeigt das Dashboard einen Initialen-
+# Avatar statt eines Fotos.
+# --------------------------------------------------------------------------
+def _http_get_json(url, timeout=8):
+    req = urllib.request.Request(url, headers={"User-Agent": "TdF2026-Tipprunde/1.0 (build_data.py)"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+class _PhotoFetchError(Exception):
+    """Netzwerk-/API-Fehler beim Foto-Abruf — im Unterschied zu einem
+    bestaetigten 'kein Foto gefunden' NICHT cachen, damit der naechste
+    Build es erneut versucht statt den Fahrer dauerhaft ohne Foto zu lassen."""
+
+
+def _wikipedia_photo(name, size=200):
+    """Bester Volltext-Treffer fuer `name` + dessen Page-Image-Thumbnail,
+    in einer einzigen API-Anfrage (generator=search + prop=pageimages).
+    None = bestaetigt kein Foto gefunden. Wirft _PhotoFetchError bei
+    Netzwerk-/API-Problemen (siehe fetch_rider_photos)."""
+    params = {
+        "action": "query", "generator": "search", "gsrsearch": name, "gsrlimit": "1",
+        "prop": "pageimages", "piprop": "thumbnail", "pithumbsize": str(size), "format": "json",
+    }
+    url = WIKIPEDIA_API + "?" + urllib.parse.urlencode(params)
+    data = None
+    for attempt in range(3):
+        try:
+            data = _http_get_json(url)
+            break
+        except urllib.error.HTTPError as e:
+            if e.code == 429 and attempt < 2:
+                time.sleep(2 + attempt * 2)
+                continue
+            raise _PhotoFetchError(str(e)) from e
+        except (urllib.error.URLError, TimeoutError, ValueError, OSError) as e:
+            raise _PhotoFetchError(str(e)) from e
+    if data is None:
+        raise _PhotoFetchError("retries exhausted")
+    for page in data.get("query", {}).get("pages", {}).values():
+        thumb = page.get("thumbnail", {}).get("source")
+        if thumb:
+            return thumb
+    return None
+
+
+def load_photo_cache():
+    if PHOTO_CACHE_FILE.exists():
+        try:
+            return json.loads(PHOTO_CACHE_FILE.read_text(encoding="utf-8"))
+        except (ValueError, OSError):
+            return {}
+    return {}
+
+
+def fetch_rider_photos(names, skip=False):
+    """dict Fahrername -> Wikipedia-Foto-URL oder None. Nutzt/pflegt
+    PHOTO_CACHE_FILE; fragt nur Namen an, die noch nicht im Cache stehen."""
+    cache = load_photo_cache()
+    if skip:
+        return cache
+    missing = [n for n in dict.fromkeys(names) if n not in cache]
+    if not missing:
+        return cache
+    changed = False
+    for name in missing:
+        try:
+            cache[name] = _wikipedia_photo(name)
+            changed = True
+        except _PhotoFetchError:
+            pass  # nicht cachen -> naechster Build versucht's erneut
+        time.sleep(0.6)  # rücksichtsvoll gegenüber der Wikipedia-API
+    if changed:
+        PHOTO_CACHE_FILE.write_text(json.dumps(cache, ensure_ascii=False, indent=1, sort_keys=True), encoding="utf-8")
+    return cache
+
+
+_LATIN_ASCII_EXTRA = str.maketrans({
+    "ø": "o", "Ø": "O", "æ": "ae", "Æ": "AE", "ł": "l", "Ł": "L",
+    "đ": "d", "Đ": "D", "ß": "ss", "þ": "th", "Þ": "Th", "ð": "d", "Ð": "D",
+})
+
+
+def match_key(s):
+    """Namensschlüssel für robusten Abgleich zwischen RIderPoints.csv und
+    Startlist2026: nur Kleinbuchstaben, Diakritika/Leerzeichen/Zeichensetzung
+    entfernt (identisch zu match_key()/stri_trans_general(...,'Latin-ASCII')
+    in index.qmd). unicodedata deckt reine Akzente ab (é, ö, č …); die paar
+    Buchstaben, die nicht per Combining-Mark zerlegbar sind (ø, æ, ł, ß …),
+    werden vorher explizit ersetzt."""
+    s = str(s).translate(_LATIN_ASCII_EXTRA)
+    s = unicodedata.normalize("NFKD", s)
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    return re.sub(r"[^a-z]", "", s.lower())
+
+
+def parse_rider_prices(path):
+    """RIderPoints.csv ist ein Excel-Rohexport: 5 Team-Blöcke nebeneinander
+    (je 4 Spalten: Label/Name/Rating/Leerspalte), jeder Block gefolgt von 8
+    Fahrer-Zeilen, Blöcke durch Leerzeilen getrennt. Portierung von
+    parse_rider_prices() in index.qmd. Rückgabe: (rider_prices, team_prices),
+    beide dict match_key -> Rating (int)."""
+    if not path.exists():
+        return {}, {}
+    with open(path, newline="", encoding="utf-8-sig") as f:
+        rows = list(csv.reader(f))[1:]  # erste Zeile: nur "Rating"-Spaltenköpfe je Block
+
+    rider_prices, team_prices = {}, {}
+    i, n = 0, len(rows)
+    while i < n:
+        row = rows[i]
+        if all(not cell.strip() for cell in row):
+            i += 1
+            continue
+        team_blocks = {}  # Block-Start-Spalte -> Teamname
+        for bs in range(0, len(row), 4):
+            label = row[bs].strip() if bs < len(row) else ""
+            name = row[bs + 1].strip() if bs + 1 < len(row) else ""
+            rating = row[bs + 2].strip() if bs + 2 < len(row) else ""
+            if label == "Team" and name:
+                team_blocks[bs] = name
+                try:
+                    team_prices[match_key(name)] = int(float(rating))
+                except ValueError:
+                    pass
+        if team_blocks:
+            i += 1
+            for _ in range(8):
+                if i >= n:
+                    break
+                row2 = rows[i]
+                for bs in team_blocks:
+                    name = row2[bs + 1].strip() if bs + 1 < len(row2) else ""
+                    rating = row2[bs + 2].strip() if bs + 2 < len(row2) else ""
+                    if name:
+                        try:
+                            rider_prices[match_key(name)] = int(float(rating))
+                        except ValueError:
+                            pass
+                i += 1
+        else:
+            i += 1
+    return rider_prices, team_prices
+
+
+# --------------------------------------------------------------------------
+# Kanter-Kader: 0/1-Rucksack fürs budget-optimale Team
+# --------------------------------------------------------------------------
+def optimal_team(pool, k=15, budget=560):
+    """Wählt aus `pool` (Liste von dicts mit rating/points) bis zu `k`
+    Einträge (nicht zwingend alle) mit Kostensumme <= `budget` (Rohwert,
+    wird intern in 10er-Einheiten gerechnet), die die Punktesumme
+    maximieren. Portierung von optimal_team() in index.qmd."""
+    costs = [round(item["rating"] / 10) for item in pool]
+    values = [item["points"] for item in pool]
+    budget_u = budget // 10
+    n = len(pool)
+    NEG = float("-inf")
+    dp = [[NEG] * (budget_u + 1) for _ in range(k + 1)]
+    dp[0] = [0] * (budget_u + 1)
+    chosen = [[[False] * (budget_u + 1) for _ in range(k + 1)] for _ in range(n)]
+    for idx in range(n):
+        c_i, v_i = costs[idx], values[idx]
+        if c_i <= 0 or c_i > budget_u:
+            continue
+        for kk in range(k, 0, -1):
+            for b in range(budget_u, c_i - 1, -1):
+                candidate = dp[kk - 1][b - c_i] + v_i
+                if candidate > dp[kk][b]:
+                    dp[kk][b] = candidate
+                    chosen[idx][kk][b] = True
+    best_value, best_kk, best_b = 0, 0, 0
+    for kk in range(k + 1):
+        for b in range(budget_u + 1):
+            if dp[kk][b] > best_value:
+                best_value, best_kk, best_b = dp[kk][b], kk, b
+    selected = []
+    kk, b = best_kk, best_b
+    for idx in range(n - 1, -1, -1):
+        if kk > 0 and chosen[idx][kk][b]:
+            selected.append(idx)
+            kk -= 1
+            b -= costs[idx]
+    riders = sorted((pool[i] for i in selected), key=lambda r: -r["points"])
+    total_cost = sum(pool[i]["rating"] for i in selected)
+    return riders, best_value, total_cost
+
+
+def optimal_team_full(pool_riders, team_options, k=15, budget=560):
+    """Wie ein echter Tipp: bis zu 15 Fahrer + höchstens 1 Team-Tipp (oder
+    keiner — eine 'kein Team'-Option mit 0 Kosten/0 Punkten steht immer zur
+    Wahl), Gesamtkosten <= budget. Probiert jede bekannte Teamoption durch
+    und behält die beste Gesamtpunktzahl. Portierung von
+    optimal_team_full() in index.qmd."""
+    options = [{"team": None, "rating": 0, "points": 0}] + team_options
+    best = None
+    for opt in options:
+        team_rating = opt["rating"]
+        if team_rating is None or team_rating > budget:
+            continue
+        riders, riders_value, riders_cost = optimal_team(pool_riders, k=k, budget=budget - team_rating)
+        total = riders_value + opt["points"]
+        if best is None or total > best["total"]:
+            best = {
+                "riders": riders, "riders_cost": riders_cost,
+                "team": opt["team"], "team_rating": team_rating, "team_points": opt["points"],
+                "total": total,
+            }
+    return best
 
 
 # --------------------------------------------------------------------------
@@ -244,6 +479,27 @@ def build():
     def ent_stages(name):
         return (ent.get(name) or [0] * stages_done)[:stages_done]
 
+    # ---- Kanter-Kader: Fahrer-/Team-Kosten aus RIderPoints.csv, per
+    # Namensschlüssel (match_key) auf die echten Startlist2026-Namen gemappt.
+    # Fahrer/Teams ohne Preis (z.B. Nachnominierungen) bleiben ohne Kosten.
+    rider_prices, team_prices = parse_rider_prices(COSTS_CSV)
+
+    rider_cost = {}
+    for key, meta in riders_meta.items():
+        team = meta["team"] or ""
+        core = key[: -len(team)] if team and key.endswith(team) else key
+        mk = match_key(core)
+        if mk in rider_prices:
+            rider_cost[key] = rider_prices[mk]
+
+    team_cost = {}
+    for team_name in teams:
+        mk = match_key(team_name)
+        if mk in team_prices:
+            team_cost[team_name] = team_prices[mk]
+
+    team_stage_points = {t: ent_stages(t) for t in teams}
+
     # ---- Spieler ----
     player_names = sorted(rider_picks.keys() | team_pick.keys(), key=str.casefold)
     player_stages = {}
@@ -296,8 +552,14 @@ def build():
         rel.append({
             "n": meta["name"], "t": meta["team"], "s": meta["spec"],
             "a": meta["age"], "b": meta["bib"], "p": p, "bd": bd, "by": by,
+            "st": st, "c": rider_cost.get(key),
         })
     rel.sort(key=lambda x: (-x["p"], x["n"].casefold()))
+
+    # ---- Fahrerfotos (Wikipedia), gecacht -- SKIP_PHOTOS=1 zum Ueberspringen ----
+    photo_cache = fetch_rider_photos([r["n"] for r in rel], skip=os.environ.get("SKIP_PHOTOS") == "1")
+    for r in rel:
+        r["img"] = photo_cache.get(r["n"])
 
     # ---- Team-Tipp-Punkte (nur getippte Teams mit Punkten) ----
     team_pts = {}
@@ -308,7 +570,64 @@ def build():
             if pts > 0:
                 team_pts[t] = pts
 
-    write_data_js(stages_done, players_js, rel, team_pts, quotes)
+    # ---- Kanter-Kader: für jede Etappe unabhängig das budget-optimale Team
+    # mit Kenntnis NUR der Ergebnisse bis zu dieser Etappe ("hätte man's bis
+    # dahin gewusst") — Etappe 8 kann daher ein anderes Team zeigen als
+    # Etappe 9. Für GLOBALE Vergleiche (Baseline im Punkteverlauf-Chart) wäre
+    # es irreführend, diese wechselnden Teams zu einer Linie zusammenzu-
+    # rechnen — stattdessen wird das für die letzte Etappe optimierte Team
+    # als EIN festes Team verwendet (KANTER_KADER), dessen eigene kumulierte
+    # Punkte über alle Etappen nachverfolgt werden.
+    priced_riders = [
+        {
+            "key": key, "name": riders_meta[key]["name"], "team": riders_meta[key]["team"],
+            "rating": rating, "stages": ent_stages(key),
+        }
+        for key, rating in rider_cost.items()
+    ]
+    priced_teams = [
+        {"team": name, "rating": rating, "stages": team_stage_points[name]}
+        for name, rating in team_cost.items()
+    ]
+
+    optimal_teams = []
+    for stage_idx in range(stages_done):
+        pool = [
+            {"key": r["key"], "name": r["name"], "team": r["team"], "rating": r["rating"],
+             "points": sum(r["stages"][: stage_idx + 1])}
+            for r in priced_riders
+        ]
+        team_opts = [
+            {"team": t["team"], "rating": t["rating"], "points": sum(t["stages"][: stage_idx + 1])}
+            for t in priced_teams
+        ]
+        best = optimal_team_full(pool, team_opts)
+        optimal_teams.append({
+            "stage": stage_idx + 1,
+            "team": best["team"], "teamCost": best["team_rating"], "teamPoints": best["team_points"],
+            "totalCost": best["riders_cost"] + best["team_rating"], "totalPoints": best["total"],
+            "riders": [
+                {"key": r["key"], "n": r["name"], "t": r["team"], "c": r["rating"], "p": r["points"]}
+                for r in best["riders"]
+            ],
+        })
+
+    kanter_kader = None
+    if optimal_teams:
+        fixed = optimal_teams[-1]
+        fixed_rider_keys = [r["key"] for r in fixed["riders"]]
+        rider_cum = {k: list(itertools.accumulate(ent_stages(k))) for k in fixed_rider_keys}
+        team_cum = (
+            list(itertools.accumulate(team_stage_points[fixed["team"]]))
+            if fixed["team"] else [0] * stages_done
+        )
+        cum = [sum(rider_cum[k][i] for k in fixed_rider_keys) + team_cum[i] for i in range(stages_done)]
+        kanter_kader = {**fixed, "cum": cum}
+
+    write_data_js(
+        stages_done, players_js, rel, team_pts, quotes, team_cost, optimal_teams, kanter_kader,
+        {t: team_stage_points[t] for t in team_cost},
+    )
 
     print(f"✓ data.js geschrieben ({OUT})")
     print(f"  Etappen gefahren: {stages_done} / {STAGES_TOTAL}")
@@ -318,7 +637,9 @@ def build():
     print(f"  Sprüche:          {len(quotes)}")
 
 
-def write_data_js(stages_done, players_js, rel, team_pts, quotes):
+def write_data_js(
+    stages_done, players_js, rel, team_pts, quotes, team_cost, optimal_teams, kanter_kader, team_stage_points,
+):
     o = []
     o.append("// Tour de France 2026 Tipprunde — Daten")
     o.append("// ⚠️  AUTOMATISCH GENERIERT von build_data.py aus tdf_tippspiel_master.xlsx.")
@@ -346,7 +667,9 @@ def write_data_js(stages_done, players_js, rel, team_pts, quotes):
     o.append("")
 
     o.append("// Fahrer: n, t=Team, s=Spezialist, a=Alter, b=Startnummer, p=Punkte gesamt,")
-    o.append("// bd=[Etappe,Punkte] bester Tag, by=getippt von")
+    o.append("// bd=[Etappe,Punkte] bester Tag, by=getippt von, st=Punkte je Etappe,")
+    o.append("// c=Kosten aus RIderPoints.csv fürs Kanter-Kader (null wenn unbekannt),")
+    o.append("// img=Wikipedia-Fotolink (null wenn kein Artikel/Foto gefunden)")
     o.append("export const RIDERS = [")
     for r in rel:
         bd = "null" if r["bd"] is None else f"[{r['bd'][0]},{r['bd'][1]}]"
@@ -355,9 +678,12 @@ def write_data_js(stages_done, players_js, rel, team_pts, quotes):
         s = js_str(r["s"]) if r["s"] else "null"
         a = r["a"] if r["a"] is not None else "null"
         b = r["b"] if r["b"] is not None else "null"
+        st = ",".join(map(str, r["st"]))
+        c = r["c"] if r["c"] is not None else "null"
+        img = js_str(r["img"]) if r.get("img") else "null"
         o.append(
-            "  {{n:{n}, t:{t}, s:{s}, a:{a}, b:{b}, p:{p}, bd:{bd}, by:[{by}]}},".format(
-                n=js_str(r["n"]), t=t, s=s, a=a, b=b, p=r["p"], bd=bd, by=by,
+            "  {{n:{n}, t:{t}, s:{s}, a:{a}, b:{b}, p:{p}, bd:{bd}, by:[{by}], st:[{st}], c:{c}, img:{img}}},".format(
+                n=js_str(r["n"]), t=t, s=s, a=a, b=b, p=r["p"], bd=bd, by=by, st=st, c=c, img=img,
             )
         )
     o.append("];")
@@ -368,6 +694,62 @@ def write_data_js(stages_done, players_js, rel, team_pts, quotes):
     for t, pts in sorted(team_pts.items(), key=lambda kv: (-kv[1], kv[0])):
         o.append(f"  {js_str(t)}: {pts},")
     o.append("};")
+    o.append("")
+
+    o.append("// Team-Kosten aus RIderPoints.csv fürs Kanter-Kader (nur Teams mit bekanntem Preis)")
+    o.append("export const TEAM_COSTS = {")
+    for t, c in sorted(team_cost.items(), key=lambda kv: (-kv[1], kv[0])):
+        o.append(f"  {js_str(t)}: {c},")
+    o.append("};")
+    o.append("")
+
+    o.append("// Team-Punkte je Etappe (nur Teams mit bekanntem Preis) — Basis, um den")
+    o.append("// Tagesbeitrag eines Team-Tipps im Kanter-Kader auszurechnen.")
+    o.append("export const TEAM_STAGE_POINTS = {")
+    for t in sorted(team_stage_points, key=str.casefold):
+        o.append(f"  {js_str(t)}: [{','.join(map(str, team_stage_points[t]))}],")
+    o.append("};")
+    o.append("")
+
+    def riders_js_array(riders):
+        return ",".join(
+            "{{n:{n}, t:{t}, c:{c}, p:{p}}}".format(
+                n=js_str(r["n"]), t=js_str(r["t"]) if r["t"] else "null", c=r["c"], p=r["p"],
+            )
+            for r in riders
+        )
+
+    o.append("// Kanter-Kader: budget-optimales Team je Etappe (<=560 Kosten, <=15 Fahrer")
+    o.append("// + optionaler Team-Tipp), unabhängig für jede Etappe optimiert — nur mit")
+    o.append("// Wissen der Ergebnisse bis zu dieser Etappe ('hätte man's bis dahin gewusst').")
+    o.append("export const OPTIMAL_TEAMS = [")
+    for ot in optimal_teams:
+        team_js = js_str(ot["team"]) if ot["team"] else "null"
+        o.append(
+            "  {{stage:{stage}, team:{team}, teamCost:{tc}, teamPoints:{tp}, totalCost:{totc}, "
+            "totalPoints:{totp}, riders:[{riders}]}},".format(
+                stage=ot["stage"], team=team_js, tc=ot["teamCost"], tp=ot["teamPoints"],
+                totc=ot["totalCost"], totp=ot["totalPoints"], riders=riders_js_array(ot["riders"]),
+            )
+        )
+    o.append("];")
+    o.append("")
+
+    o.append("// Festes Kanter-Kader-Team (Optimum der letzten gefahrenen Etappe) als")
+    o.append("// durchgehende Baseline — cum = eigene kumulierte Punkte über alle gefahrenen")
+    o.append("// Etappen (anders als OPTIMAL_TEAMS, das je Etappe wechseln kann).")
+    if kanter_kader:
+        team_js = js_str(kanter_kader["team"]) if kanter_kader["team"] else "null"
+        o.append(
+            "export const KANTER_KADER = {{stage:{stage}, team:{team}, teamCost:{tc}, teamPoints:{tp}, "
+            "totalCost:{totc}, totalPoints:{totp}, riders:[{riders}], cum:[{cum}]}};".format(
+                stage=kanter_kader["stage"], team=team_js, tc=kanter_kader["teamCost"],
+                tp=kanter_kader["teamPoints"], totc=kanter_kader["totalCost"], totp=kanter_kader["totalPoints"],
+                riders=riders_js_array(kanter_kader["riders"]), cum=",".join(map(str, kanter_kader["cum"])),
+            )
+        )
+    else:
+        o.append("export const KANTER_KADER = null;")
     o.append("")
 
     o.append("// Teamfunk — Trash Talk der Runde (Sheet 'Quotes' in der xlsx pflegen).")
