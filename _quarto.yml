@@ -1,5 +1,11 @@
 project:
   type: website
+  resources:
+    - index.html
+    - support.js
+    - data.js
+    - TdF-Tipprunde-LeTour.dc.html
+    - TdF-Tipprunde-Nachtfahrt.dc.html
 
 website:
   title: "TdF2026"

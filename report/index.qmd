@@ -62,10 +62,10 @@ library(kableExtra)
 #| echo: false
 #| include: false
 
-total = read_excel("tdf_tippspiel_master.xlsx", sheet = "Auswertung Gesamt")
-stage = read_excel("tdf_tippspiel_master.xlsx", sheet = "Auswertung Stage")
-teams = read_excel("tdf_tippspiel_master.xlsx", sheet = "Spieler_Teams")
-startlist = read_excel("tdf_tippspiel_master.xlsx", sheet = "Startlist2026")
+total = read_excel("../tdf_tippspiel_master.xlsx", sheet = "Auswertung Gesamt")
+stage = read_excel("../tdf_tippspiel_master.xlsx", sheet = "Auswertung Stage")
+teams = read_excel("../tdf_tippspiel_master.xlsx", sheet = "Spieler_Teams")
+startlist = read_excel("../tdf_tippspiel_master.xlsx", sheet = "Startlist2026")
 spieler_liste <-sort(unique(teams$Spieler))
 ```
 
