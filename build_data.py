@@ -59,6 +59,7 @@ XLSX = ROOT / "tdf_tippspiel_master.xlsx"
 COSTS_CSV = ROOT / "RIderPoints.csv"
 OUT = ROOT / "data.js"
 PHOTO_CACHE_FILE = ROOT / ".rider_photos_cache.json"
+QUOTES_FILE = ROOT / "quotes.json"
 WIKIPEDIA_API = "https://en.wikipedia.org/w/api.php"
 
 # Gesamtzahl Etappen der Tour. Wie viele bereits gefahren sind, ergibt sich
@@ -420,16 +421,22 @@ def read_startlist(wb):
     return riders, teams
 
 
-def read_quotes(wb):
-    if "Quotes" not in wb.sheetnames:
+def read_quotes():
+    """Teamfunk/Trash-Talk-Sprüche: bewusst NICHT in der xlsx, sondern in
+    quotes.json — die xlsx wird unabhängig (z.B. von main) aktualisiert und
+    hat/kennt dieses Sheet nicht; als eigene Datei überlebt das Feature jedes
+    xlsx-Update unbeschadet."""
+    if not QUOTES_FILE.exists():
         return []
-    ws = wb["Quotes"]
-    out = []
-    for r in range(2, ws.max_row + 1):
-        by, txt = ws.cell(r, 1).value, ws.cell(r, 2).value
-        if by and txt:
-            out.append({"by": str(by), "txt": str(txt)})
-    return out
+    try:
+        data = json.loads(QUOTES_FILE.read_text(encoding="utf-8"))
+    except (ValueError, OSError):
+        return []
+    return [
+        {"by": str(q["by"]), "txt": str(q["txt"])}
+        for q in data
+        if q.get("by") and q.get("txt")
+    ]
 
 
 # --------------------------------------------------------------------------
@@ -471,7 +478,7 @@ def build():
     ent, stages_done = read_entity_stage_points(wb, pts_map)
     riders_meta, teams = read_startlist(wb)
     rider_picks, team_pick, tipped_by = read_tips(wb, teams)
-    quotes = read_quotes(wb)
+    quotes = read_quotes()
 
     if stages_done == 0:
         sys.exit("Keine gefahrenen Etappen in 'Ergebnisse_Roh' gefunden.")
