@@ -115,7 +115,7 @@ def stage_columns(ws, header_row=1):
     cols = []
     for c in range(1, ws.max_column + 1):
         v = ws.cell(header_row, c).value
-        if isinstance(v, str) and re.match(r"^\s*(S|Stage)\s*0*\d+\s*$", v):
+        if isinstance(v, str) and re.match(r"^\s*(S|Stage)\s*0*\d+", v):
             cols.append(c)
     return cols
 
