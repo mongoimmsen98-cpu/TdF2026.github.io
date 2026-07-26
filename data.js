@@ -3,7 +3,7 @@
 //     Nicht von Hand bearbeiten — stattdessen die xlsx ändern und
 //     `python build_data.py` ausführen.
 export const STAGES_DONE = 26;
-export const STAGES_TOTAL = 21;
+export const STAGES_TOTAL = 26;
 
 export const PLAYERS = [
   {n:'Bendix', avg:28.0, best:[6,60], worst:[25,0], tip:null, tipPts:0, stages:[53,35,59,2,25,60,45,50,10,51,15,42,27,52,36,28,5,8,28,15,12,25,20,24,0,0], ranks:[8,14,14,16,16,16,14,11,13,14,14,13,11,12,14,15,16,16,16,16,16,16,16,16,16,16]},
@@ -120,7 +120,7 @@ export const RIDERS = [
   {n:'Romo Javier', t:'Movistar Team', s:'GC', a:27, b:147, p:2, bd:[19,2], by:[], st:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0], c:10, img:null},
   {n:'Bennett George', t:'NSN Cycling Team', s:'GC', a:36, b:133, p:1, bd:[13,1], by:['Sebbo'], st:[0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0], c:10, img:'https://upload.wikimedia.org/wikipedia/commons/thumb/7/7b/George_Bennett_%282015-05-27%29_-_Bornem_-_Ronde_van_Belgi%C3%AB%2C_proloog%2C_individuele_tijdrit.jpg/250px-George_Bennett_%282015-05-27%29_-_Bornem_-_Ronde_van_Belgi%C3%AB%2C_proloog%2C_individuele_tijdrit.jpg'},
   {n:'Delbove Joris', t:'TotalEnergies', s:'GC', a:25, b:203, p:1, bd:[17,1], by:[], st:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0], c:10, img:null},
-  {n:'Rubio Einer', t:'Movistar Team', s:'Climber', a:28, b:148, p:1, bd:[15,1], by:[], st:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0], c:10, img:'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a5/Einer_Rubio%2C_Giro_d%27Italia_2023.jpg/250px-Einer_Rubio%2C_Giro_d%27Italia_2023.jpg'},
+  {n:'Rubio Einer', t:'Movistar Team', s:'Climber', a:28, b:148, p:1, bd:[15,1], by:[], st:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0], c:10, img:null},
   {n:'Abrahamsen Jonas', t:'Uno-X Mobility', s:'Classic', a:30, b:122, p:0, bd:null, by:['Chris','Till'], st:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], c:10, img:'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1c/Jonas_Abrahamsen_%282023%29.jpg/250px-Jonas_Abrahamsen_%282023%29.jpg'},
   {n:'Affini Edoardo', t:'Team Visma | Lease a Bike', s:'TT', a:30, b:12, p:0, bd:null, by:['Chris'], st:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], c:10, img:'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/EdoAffini2024.jpg/250px-EdoAffini2024.jpg'},
   {n:'Alaphilippe Julian', t:'Tudor Pro Cycling Team', s:'Classic', a:34, b:191, p:0, bd:null, by:['Lanci','Lea'], st:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], c:10, img:'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f6/2018_Tour_of_Britain_stage_3_-_stage_winner_Julian_Alaphilippe_%28cropped%29.JPG/250px-2018_Tour_of_Britain_stage_3_-_stage_winner_Julian_Alaphilippe_%28cropped%29.JPG'},
