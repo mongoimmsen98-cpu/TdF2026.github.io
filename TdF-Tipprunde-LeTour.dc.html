@@ -161,6 +161,41 @@
         <p style="font-size:12px; color:#7c7568; margin:0 2px;">Hinweis: Alle Werte werden aus dem Master-Dokument <code>tdf_tippspiel_master.xlsx</code> berechnet (Etappenergebnisse × Punktematrix) und mit <code>build_data.py</code> nach <code>data.js</code> geschrieben.</p>
       </section>
     </sc-if>
+    
+  <sc-if value="{{ isFinalGC }}">
+  <div style="padding:18px;">
+    <h2 style="margin-bottom:20px;">
+      Final GC Classifications
+    </h2>
+    <sc-repeat for="tbl in {{ finalGcTables }}">
+      <div style="
+        background:white;
+        border:1px solid #e7e1d2;
+        border-radius:12px;
+        padding:16px;
+        margin-bottom:18px;
+      ">
+        <h3>{{ tbl.title }}</h3>
+        <sc-repeat for="r in {{ tbl.rows }}">
+          <div style="
+            display:flex;
+            justify-content:space-between;
+            padding:6px 0;
+            border-bottom:1px solid #f3f0e8;
+          ">
+            <span>
+              {{ r.pos }}. {{ r.name }}
+            </span>
+              <strong>
+                {{ r.pts }} pts
+              </strong>
+            </div>
+          </sc-repeat>
+        </div>
+      </sc-repeat>
+    </div>
+  </sc-if>
+    
     <sc-if value="{{ isFahrer }}" hint-placeholder-val="{{ false }}">
       <section style="padding-top:20px; display:flex; flex-direction:column; gap:20px;">
         <h2 style="margin:0; font-family:'Saira Condensed',sans-serif; font-weight:700; font-style:italic; text-transform:uppercase; letter-spacing:0.01em; font-size:30px;" class="dc-h2">Beste Picks</h2>
@@ -415,7 +450,7 @@ class Component extends DCLogic {
     const byName = {}; board.forEach(p=>{ byName[p.n]=p; });
     const riderByName = {}; RD.forEach(r=>{ riderByName[r.n]=r; });
     const leader = board[0];
-    const tabDefs = [['gesamt','Gesamtstand'],['etappen','Etappen'],['fahrer','Fahrer'],['teams','Teams'],['duell','Duell']];
+    const tabDefs = [['gesamt','Gesamtstand'],['etappen','Etappen'],['finalgc','Final GC'],['fahrer','Fahrer'],['teams','Teams'],['duell','Duell']];
     const tabs = tabDefs.map(([k,label])=>({ key:k, label, active:S.tab===k,
       bg: S.tab===k ? '#ffcb00' : '#fffdf8', fg: S.tab===k ? '#1a1608' : '#141414', border: S.tab===k ? '#ffcb00' : '#e7e1d2',
       onClick: ()=>this.setState({tab:k}) }));
@@ -438,7 +473,7 @@ class Component extends DCLogic {
       };
     });
     // Etappen
-    const stagePills = Array.from({length:D.STAGES_DONE}, (_,i)=>({
+    const stagePills = Array.from({length:21}, (_,i)=>({
       label:'S0'+(i+1), active:S.stage===i+1,
       bg: S.stage===i+1 ? '#ffcb00' : '#fffdf8', fg: S.stage===i+1 ? '#1a1608' : '#141414', border: S.stage===i+1 ? '#ffcb00' : '#e7e1d2',
       onClick: ()=>this.setState({stage:i+1}) }));
@@ -479,6 +514,28 @@ class Component extends DCLogic {
         bg: off?'#f1ede2':'#fffdf8', fg: off?'#7c7568':'#141414', border: off?'#e7e1d2':col, op: off?0.6:1,
         onClick: ()=>this.setState(st=>{ const h={...st.chartHidden}; if(h[p.n])delete h[p.n]; else h[p.n]=true; return {chartHidden:h}; }) };
     });
+    
+    // Final GC
+    const finalGcDefs = [
+      { title:'🏆 General Classification', idx:21 },
+      { title:'⛰ Mountain Classification', idx:22 },
+      { title:'🟢 Sprint Classification', idx:23 },
+      { title:'⚪ Youth Classification', idx:24 },
+      { title:'👥 Team Classification', idx:25 }
+    ];
+    const finalGcTables = finalGcDefs.map(g => ({
+      title: g.title,
+      rows: [...board]
+        .sort((a,b)=>(b.stages[g.idx]||0)-(a.stages[g.idx]||0))
+        .filter(p => (p.stages[g.idx]||0) > 0)
+        .map((p,i)=>({
+          pos: i+1,
+          name: p.n,
+          pts: p.stages[g.idx]
+        }))
+    }));
+        
+    
     // Fahrer
     const picksAccents = ['#ffcb00','#b8b09c','#c98f4b'];
     const medals = ['Bester Pick','Zweitbester Pick','Drittbester Pick'];
@@ -571,7 +628,7 @@ class Component extends DCLogic {
       stageDone:D.STAGES_DONE, stageTotal:D.STAGES_TOTAL,
       progressPct: Math.round(D.STAGES_DONE/D.STAGES_TOTAL*1000)/10 + '%',
       leaderName: leader.n, leaderPts: leader.total,
-      tabs, isGesamt:S.tab==='gesamt', isEtappen:S.tab==='etappen', isFahrer:S.tab==='fahrer', isTeams:S.tab==='teams', isDuell:S.tab==='duell',
+      tabs, isGesamt:S.tab==='gesamt', isEtappen:S.tab==='etappen',isFinalGC:S.tab==='finalgc', isFahrer:S.tab==='fahrer', isTeams:S.tab==='teams', isDuell:S.tab==='duell',
       rows, stagePills, stageRows, stageWinner, stageWinnerPts,
       gridLines, chartLines:lines, chartX, chartLegend, chartDots,
       chartAll: ()=>this.setState({chartHidden:{}}),
