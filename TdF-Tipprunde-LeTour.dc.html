@@ -629,7 +629,7 @@ class Component extends DCLogic {
       progressPct: Math.round(D.STAGES_DONE/D.STAGES_TOTAL*1000)/10 + '%',
       leaderName: leader.n, leaderPts: leader.total,
       tabs, isGesamt:S.tab==='gesamt', isEtappen:S.tab==='etappen',isFinalGC:S.tab==='finalgc', isFahrer:S.tab==='fahrer', isTeams:S.tab==='teams', isDuell:S.tab==='duell',
-      rows, stagePills, stageRows, stageWinner, stageWinnerPts,
+      rows, stagePills, stageRows,finalGcTables, stageWinner, stageWinnerPts,
       gridLines, chartLines:lines, chartX, chartLegend, chartDots,
       chartAll: ()=>this.setState({chartHidden:{}}),
       chartTop5: ()=>this.setState({chartHidden: Object.fromEntries(board.slice(5).map(p=>[p.n,true]))}),
