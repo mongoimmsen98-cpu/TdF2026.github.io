@@ -64,7 +64,7 @@ WIKIPEDIA_API = "https://en.wikipedia.org/w/api.php"
 
 # Gesamtzahl Etappen der Tour. Wie viele bereits gefahren sind, ergibt sich
 # automatisch aus den befüllten Etappen-Spalten in 'Ergebnisse_Roh'.
-STAGES_TOTAL = 21
+STAGES_TOTAL = 26
 
 
 # --------------------------------------------------------------------------
