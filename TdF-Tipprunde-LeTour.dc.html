@@ -163,38 +163,44 @@
     </sc-if>
     
   <sc-if value="{{ isFinalGC }}">
-  <div style="padding:18px;">
-    <h2 style="margin-bottom:20px;">
-      Final GC Classifications
+
+  <section style="padding-top:20px; display:flex; flex-direction:column; gap:20px;">
+
+    <h2 style="
+      margin:0;
+      font-family:'Saira Condensed',sans-serif;
+      font-weight:700;
+      font-style:italic;
+      text-transform:uppercase;
+      font-size:30px;
+    ">
+      Final GC
     </h2>
-    <sc-repeat for="tbl in {{ finalGcTables }}">
+
+    <sc-for list="{{ finalGcTables }}" as="tbl">
       <div style="
-        background:white;
+        background:#fffdf8;
         border:1px solid #e7e1d2;
-        border-radius:12px;
+        border-radius:16px;
         padding:16px;
-        margin-bottom:18px;
       ">
         <h3>{{ tbl.title }}</h3>
-        <sc-repeat for="r in {{ tbl.rows }}">
+        <sc-for list="{{ tbl.rows }}" as="r">
           <div style="
             display:flex;
             justify-content:space-between;
             padding:6px 0;
-            border-bottom:1px solid #f3f0e8;
+            border-bottom:1px solid #f1ede2;
           ">
-            <span>
-              {{ r.pos }}. {{ r.name }}
-            </span>
-              <strong>
-                {{ r.pts }} pts
-              </strong>
-            </div>
-          </sc-repeat>
-        </div>
-      </sc-repeat>
-    </div>
-  </sc-if>
+                <span>{{ r.pos }}. {{ r.name }}</span>
+                <strong>{{ r.pts }} pts</strong>
+              </div>
+            </sc-for>
+          </div>
+        </sc-for>
+      </section>
+    </sc-if>
+      
     
     <sc-if value="{{ isFahrer }}" hint-placeholder-val="{{ false }}">
       <section style="padding-top:20px; display:flex; flex-direction:column; gap:20px;">
@@ -385,7 +391,7 @@
   </sc-if>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props="{&quot;showSparklines&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Ansicht&quot;},&quot;showBadges&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Ansicht&quot;},&quot;defaultTab&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;gesamt&quot;,&quot;options&quot;:[&quot;gesamt&quot;,&quot;etappen&quot;,&quot;fahrer&quot;,&quot;teams&quot;,&quot;duell&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Ansicht&quot;}}">
+<script type="text/x-dc" data-dc-script data-props="{&quot;showSparklines&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Ansicht&quot;},&quot;showBadges&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Ansicht&quot;},&quot;defaultTab&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;gesamt&quot;,&quot;options&quot;:[&quot;gesamt&quot;,&quot;etappen&quot;,&quot;finalgc&quot;,&quot;fahrer&quot;,&quot;teams&quot;,&quot;duell&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Ansicht&quot;}}">
 class Component extends DCLogic {
   state = { ready:false, tab:'gesamt', stage:9, sel:null, search:'', sort:'p', duellA:'Richard NB', duellB:'Conni K', qi:0, chartHidden:{} };
   componentDidMount(){
