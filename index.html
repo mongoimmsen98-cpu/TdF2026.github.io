@@ -18,6 +18,16 @@
   a:hover { color:#141414; text-decoration:underline; }
   ::selection { background:#ffcb00; color:#1a1608; }
   svg, img { max-width:100%; }
+  .dc-root { background-image: repeating-linear-gradient(-22deg, rgba(168,133,12,0.05) 0px, rgba(168,133,12,0.05) 2px, transparent 2px, transparent 34px); }
+  .tdf-card { transition:transform 0.18s ease, box-shadow 0.18s ease; }
+  .tdf-card:hover { transform:translateY(-3px); box-shadow:0 12px 26px rgba(20,20,20,0.13); }
+  .pbar-track { position:relative; overflow:hidden; border-radius:999px; }
+  .pbar-fill { display:block; height:100%; border-radius:999px; transition:width 0.7s cubic-bezier(.22,.8,.24,1); position:relative; }
+  .pbar-fill::after { content:''; position:absolute; inset:0; background:linear-gradient(180deg, rgba(255,255,255,0.35), transparent 55%); }
+  .pbar-yellow { background:linear-gradient(90deg,#ffe066,#ffcb00); }
+  .pbar-gold { background:linear-gradient(90deg,#c9a53a,#a8850c); }
+  .pbar-dark { background:linear-gradient(90deg,#3d3524,#1a1608); }
+  .mini-avatar { border-radius:50%; object-fit:cover; flex:none; background:#f1ede2; }
   @media (max-width:640px){
     .dc-root { padding-left:13px !important; padding-right:13px !important; }
     .dc-header { padding:22px 20px !important; }
@@ -74,6 +84,24 @@
     90% { transform:translate(-2px,2px) rotate(0deg); }
   }
   body.fw-shake { animation: fwShake 0.6s ease var(--fw-shake-iter, 1); }
+  /* Season-Recap ("Wrapped") */
+  .wr-overlay { position:fixed; inset:0; }
+  .wr-blob { position:absolute; border-radius:50%; pointer-events:none; will-change:transform,opacity; }
+  @keyframes wrBlobA { 0% { transform:translate(0,0) scale(1); opacity:0.5; } 50% { transform:translate(6%,-8%) scale(1.22); opacity:0.85; } 100% { transform:translate(-4%,5%) scale(0.94); opacity:0.4; } }
+  @keyframes wrBlobB { 0% { transform:translate(0,0) scale(1.05); opacity:0.7; } 50% { transform:translate(-7%,6%) scale(0.9); opacity:0.35; } 100% { transform:translate(5%,-4%) scale(1.15); opacity:0.6; } }
+  @keyframes wrBlobC { 0% { transform:translate(0,0) scale(0.95); opacity:0.4; } 50% { transform:translate(4%,7%) scale(1.2); opacity:0.75; } 100% { transform:translate(-6%,-5%) scale(1); opacity:0.5; } }
+  .wr-content { position:relative; }
+  .wr-kicker { animation: wrRise 0.55s cubic-bezier(.16,.9,.24,1) both; }
+  .wr-title { animation: wrRiseBig 0.6s 0.05s cubic-bezier(.16,.9,.24,1) both; }
+  .wr-big { animation: wrPop 0.65s 0.12s cubic-bezier(.22,1.8,.36,1) both; }
+  .wr-sub { animation: wrRise 0.55s 0.2s cubic-bezier(.16,.9,.24,1) both; }
+  .wr-rows { animation: wrRise 0.55s 0.26s cubic-bezier(.16,.9,.24,1) both; }
+  .wr-foot { animation: wrRise 0.55s 0.34s cubic-bezier(.16,.9,.24,1) both; }
+  .wr-emoji { animation: wrEmojiPop 0.7s cubic-bezier(.22,1.8,.36,1) both; }
+  @keyframes wrRise { 0% { opacity:0; transform:translateY(18px); } 100% { opacity:1; transform:translateY(0); } }
+  @keyframes wrRiseBig { 0% { opacity:0; transform:translateY(24px) scale(0.96); } 100% { opacity:1; transform:translateY(0) scale(1); } }
+  @keyframes wrPop { 0% { opacity:0; transform:scale(0.6); } 65% { opacity:1; transform:scale(1.06); } 100% { opacity:1; transform:scale(1); } }
+  @keyframes wrEmojiPop { 0% { opacity:0; transform:scale(0.3) rotate(-14deg); } 60% { opacity:1; transform:scale(1.18) rotate(6deg); } 100% { opacity:1; transform:scale(1) rotate(0deg); } }
 </style>
 </helmet>
 <div class="dc-root" style="min-height:100vh; background:#f3efe5; color:#141414; font-family:'Archivo',sans-serif; font-variant-numeric:tabular-nums; padding:0 20px 64px 20px;">
@@ -104,13 +132,22 @@
     </nav>
     <sc-if value="{{ isGesamt }}" hint-placeholder-val="{{ true }}">
       <section style="padding-top:20px;">
+        <sc-if value="{{ tourComplete }}" hint-placeholder-val="{{ false }}">
+          <div onClick="{{ openWrapped }}" style="display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:16px; padding:18px 22px; border-radius:18px; cursor:pointer; background:linear-gradient(120deg,#141414,#2c2c2c); color:#fffdf8; box-shadow:0 10px 26px rgba(20,20,20,0.18);" style-hover="box-shadow:0 14px 32px rgba(20,20,20,0.26);">
+            <div style="display:flex; flex-direction:column; gap:2px;">
+              <span style="font-size:12px; letter-spacing:0.16em; text-transform:uppercase; color:#ffcb00; font-weight:700;">Die Tour ist vorbei</span>
+              <strong style="font-family:'Saira Condensed',sans-serif; font-style:italic; font-size:22px;">Dein Saison-Rückblick 2026 🎁</strong>
+            </div>
+            <span style="font-size:14px; font-weight:600; padding:10px 18px; border-radius:999px; background:#ffcb00; color:#1a1608;">Ansehen →</span>
+          </div>
+        </sc-if>
         <div style="display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:14px;">
           <h2 style="margin:0; font-family:'Saira Condensed',sans-serif; font-weight:700; font-style:italic; text-transform:uppercase; letter-spacing:0.01em; font-size:30px;" class="dc-h2">Gesamtstand</h2>
           <span style="font-size:13px; color:#7c7568;">nach {{ stageDone }} von {{ stageTotal }} Etappen · Klick auf einen Namen für Details</span>
         </div>
         <div style="display:flex; flex-direction:column; gap:8px;">
           <sc-for list="{{ rows }}" as="r" hint-placeholder-count="8">
-            <div onClick="{{ r.onClick }}" class="row-item" style="display:flex; align-items:center; gap:14px; padding:14px 16px; border-radius:16px; cursor:pointer; transition:transform 0.16s ease, box-shadow 0.16s ease; background:{{ r.bg }}; box-shadow:0 1px 3px rgba(20,20,20,0.05);" style-hover="transform:translateY(-2px); box-shadow:0 10px 22px rgba(20,20,20,0.11);">
+            <div onClick="{{ r.onClick }}" class="row-item tdf-card" style="display:flex; align-items:center; gap:14px; padding:14px 16px; border-radius:16px; cursor:pointer; background:{{ r.bg }}; box-shadow:0 1px 3px rgba(20,20,20,0.05);">
               <span style="width:26px; text-align:right; font-family:'Saira Condensed',sans-serif; font-size:20px; color:{{ r.rankColor }};">{{ r.rank }}</span>
               <span style="width:34px; font-size:12px; font-weight:600; color:{{ r.deltaColor }};">{{ r.deltaTxt }}</span>
               <span style="width:34px; height:34px; border-radius:50%; background:{{ r.avatarBg }}; color:{{ r.avatarFg }}; border:1px solid #141414; display:inline-flex; align-items:center; justify-content:center; font-family:'Saira Condensed',sans-serif; font-size:16px; flex:none;">{{ r.initial }}</span>
@@ -158,17 +195,21 @@
             <button onClick="{{ s.onClick }}" style="font-family:'Archivo',sans-serif; font-size:13px; font-weight:600; padding:8px 16px; border-radius:999px; border:1px solid {{ s.border }}; background:{{ s.bg }}; color:{{ s.fg }}; cursor:pointer;" style-hover="border-color:#141414;">{{ s.label }}</button>
           </sc-for>
         </div>
-        <div style="display:flex; align-items:center; gap:14px; background:#ffcb00; border:none; padding:15px 19px; color:#1a1608; border-radius:14px;">
-          <span style="font-family:'Saira Condensed',sans-serif; font-size:22px;">Tagessieg</span>
-          <span style="font-size:15px; font-weight:600;">{{ stageWinner }}</span>
-          <span style="margin-left:auto; font-size:17px; font-weight:700;">{{ stageWinnerPts }} Pkt</span>
+        <div style="display:flex; align-items:center; gap:16px; background:linear-gradient(120deg,#ffe066,#ffcb00); border:none; padding:15px 19px; color:#1a1608; border-radius:14px; box-shadow:0 8px 20px rgba(255,203,0,0.35);">
+          <span style="width:46px; height:46px; border-radius:50%; background:#1a1608; color:#ffcb00; display:inline-flex; align-items:center; justify-content:center; font-family:'Saira Condensed',sans-serif; font-size:20px; flex:none; box-shadow:0 2px 6px rgba(0,0,0,0.2);">{{ stageWinnerInitial }}</span>
+          <span style="display:flex; flex-direction:column; gap:1px;">
+            <span style="font-family:'Saira Condensed',sans-serif; font-style:italic; font-size:13px; letter-spacing:0.08em; text-transform:uppercase; opacity:0.75;">Tagessieg</span>
+            <span style="font-size:16px; font-weight:700;">{{ stageWinner }}</span>
+          </span>
+          <span style="margin-left:auto; font-size:22px; font-weight:700; font-family:'Saira Condensed',sans-serif; font-style:italic;">{{ stageWinnerPts }} <span style="font-size:13px; font-weight:600; font-style:normal;">Pkt</span></span>
         </div>
         <div style="display:flex; flex-direction:column; gap:8px;">
           <sc-for list="{{ stageRows }}" as="r" hint-placeholder-count="8">
-            <div onClick="{{ r.onClick }}" class="row-item" style="display:flex; align-items:center; gap:14px; padding:12px 16px; border-radius:14px; background:#fffdf8; cursor:pointer; transition:transform 0.16s ease, box-shadow 0.16s ease; box-shadow:0 1px 3px rgba(20,20,20,0.05);" style-hover="transform:translateY(-2px); box-shadow:0 10px 22px rgba(20,20,20,0.11);">
+            <div onClick="{{ r.onClick }}" class="row-item tdf-card" style="display:flex; align-items:center; gap:14px; padding:12px 16px; border-radius:14px; background:#fffdf8; cursor:pointer; box-shadow:0 1px 3px rgba(20,20,20,0.05);">
               <span style="width:26px; text-align:right; font-family:'Saira Condensed',sans-serif; font-size:18px; color:#7c7568;">{{ r.pos }}</span>
+              <span style="width:30px; height:30px; border-radius:50%; background:{{ r.avatarBg }}; color:{{ r.avatarFg }}; border:1px solid #141414; display:inline-flex; align-items:center; justify-content:center; font-family:'Saira Condensed',sans-serif; font-size:14px; flex:none;">{{ r.initial }}</span>
               <span style="flex:0 0 130px; font-size:14px; font-weight:600;">{{ r.name }}</span>
-              <span style="flex:1 1 auto; height:14px; background:#f1ede2; overflow:hidden; border-radius:999px;"><span style="display:block; height:100%; background:{{ r.barColor }}; width:{{ r.barW }};"></span></span>
+              <span class="pbar-track" style="flex:1 1 auto; height:14px; background:#f1ede2;"><span class="pbar-fill" style="background:{{ r.barColor }}; width:{{ r.barW }};"></span></span>
               <span style="width:50px; text-align:right; font-size:15px; font-weight:700;">{{ r.pts }}</span>
               <span class="hide-sm" style="width:110px; text-align:right; font-size:12px; color:#7c7568;">{{ r.cumRankTxt }}</span>
             </div>
@@ -179,6 +220,13 @@
           <p style="margin:0 0 14px 0; font-size:13px; color:#7c7568;">Kumulierte Punkte über die Etappen · in der Legende Spieler an-/ausklicken</p>
           <div style="position:relative;">
           <svg viewBox="0 0 680 300" style="width:100%; height:auto; display:block; cursor:crosshair;" onmousemove="{{ chartHover }}" onmouseleave="{{ chartLeave }}">
+            <defs>
+              <linearGradient id="leaderGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#ffcb00" stop-opacity="0.4"></stop>
+                <stop offset="100%" stop-color="#ffcb00" stop-opacity="0"></stop>
+              </linearGradient>
+            </defs>
+            <polygon points="{{ leaderAreaPts }}" fill="url(#leaderGrad)"></polygon>
             <sc-for list="{{ gridLines }}" as="g" hint-placeholder-count="5">
               <line x1="42" x2="668" y1="{{ g.y }}" y2="{{ g.y }}" stroke="#e7e1d2" stroke-width="1"></line>
               <text x="36" y="{{ g.ty }}" fill="#7c7568" font-size="11" font-family="Archivo" text-anchor="end">{{ g.label }}</text>
@@ -192,7 +240,7 @@
               <polyline points="{{ l.pts }}" fill="none" stroke="{{ l.color }}" stroke-width="{{ l.w }}" stroke-dasharray="{{ l.dash }}" opacity="{{ l.o }}" stroke-linecap="round" stroke-linejoin="round"></polyline>
             </sc-for>
             <sc-for list="{{ chartDots }}" as="d" hint-placeholder-count="5">
-              <circle cx="{{ d.x }}" cy="{{ d.y }}" r="3.5" fill="{{ d.color }}" opacity="{{ d.o }}"></circle>
+              <circle cx="{{ d.x }}" cy="{{ d.y }}" r="4.5" fill="{{ d.color }}" opacity="{{ d.o }}" stroke="#fffdf8" stroke-width="1.5"></circle>
             </sc-for>
             <sc-if value="{{ hoverActive }}" hint-placeholder-val="{{ false }}">
               <line x1="{{ hoverLineX }}" x2="{{ hoverLineX }}" y1="14" y2="262" stroke="#141414" stroke-width="1" stroke-dasharray="3 3" opacity="0.5"></line>
@@ -252,7 +300,8 @@
         </div>
         <div style="display:flex; flex-direction:column; gap:8px;">
           <sc-for list="{{ kanterRows }}" as="r" hint-placeholder-count="8">
-            <div onClick="{{ r.onClick }}" class="row-item" style="display:flex; align-items:center; gap:14px; padding:12px 16px; border-radius:14px; background:#fffdf8; cursor:pointer; transition:transform 0.16s ease, box-shadow 0.16s ease; box-shadow:0 1px 3px rgba(20,20,20,0.05);" style-hover="transform:translateY(-2px); box-shadow:0 10px 22px rgba(20,20,20,0.11);">
+            <div onClick="{{ r.onClick }}" class="row-item tdf-card" style="display:flex; align-items:center; gap:14px; padding:12px 16px; border-radius:14px; background:#fffdf8; cursor:pointer; box-shadow:0 1px 3px rgba(20,20,20,0.05);">
+              <img onClick="{{ r.avatarClick }}" src="{{ r.avatar }}" width="34" height="34" loading="lazy" referrerpolicy="no-referrer" class="mini-avatar" style="width:34px; height:34px; cursor:zoom-in;">
               <span style="flex:1 1 150px; min-width:130px; display:flex; flex-direction:column; gap:2px;">
                 <strong style="font-size:14px; font-weight:600;">{{ r.name }}</strong>
                 <span style="font-size:12px; color:#7c7568;">{{ r.team }}</span>
@@ -299,8 +348,8 @@
         </div>
         <div style="display:flex; flex-direction:column; gap:8px;">
           <sc-for list="{{ riderRows }}" as="r" hint-placeholder-count="10">
-            <div onClick="{{ r.onClick }}" class="row-item" style="display:flex; align-items:center; gap:14px; padding:12px 16px; border-radius:14px; background:#fffdf8; cursor:pointer; transition:transform 0.16s ease, box-shadow 0.16s ease; box-shadow:0 1px 3px rgba(20,20,20,0.05);" style-hover="transform:translateY(-2px); box-shadow:0 10px 22px rgba(20,20,20,0.11);">
-              <img onClick="{{ r.avatarClick }}" src="{{ r.avatar }}" width="32" height="32" loading="lazy" referrerpolicy="no-referrer" style="width:32px; height:32px; border-radius:50%; object-fit:cover; flex:none; background:#f1ede2; cursor:zoom-in;">
+            <div onClick="{{ r.onClick }}" class="row-item tdf-card" style="display:flex; align-items:center; gap:14px; padding:12px 16px; border-radius:14px; background:#fffdf8; cursor:pointer; box-shadow:0 1px 3px rgba(20,20,20,0.05);">
+              <img onClick="{{ r.avatarClick }}" src="{{ r.avatar }}" width="32" height="32" loading="lazy" referrerpolicy="no-referrer" class="mini-avatar" style="width:32px; height:32px; cursor:zoom-in;">
               <span style="flex:1 1 150px; min-width:130px; display:flex; flex-direction:column; gap:2px;">
                 <strong style="font-size:14px; font-weight:600;">{{ r.name }}</strong>
                 <span style="font-size:12px; color:#7c7568;">{{ r.team }}</span>
@@ -311,7 +360,7 @@
                   <span title="{{ b.title }}" style="font-size:10px; font-weight:700; letter-spacing:0.03em; text-transform:uppercase; padding:3px 8px; border-radius:999px; background:{{ b.bg }}; color:{{ b.fg }}; border:1px solid {{ b.border }};">{{ b.txt }}</span>
                 </sc-for>
               </span>
-              <span style="flex:1 1 auto; max-width:220px; height:12px; background:#f1ede2; overflow:hidden; border-radius:999px;"><span style="display:block; height:100%; background:#ffcb00; width:{{ r.barW }};"></span></span>
+              <span class="pbar-track" style="flex:1 1 auto; max-width:220px; height:12px; background:#f1ede2;"><span class="pbar-fill pbar-yellow" style="width:{{ r.barW }};"></span></span>
               <span style="width:44px; text-align:right; font-size:15px; font-weight:700;">{{ r.pts }}</span>
               <span class="hide-sm" style="width:56px; text-align:right; font-size:12px; color:#7c7568;">Kst. {{ r.cost }}</span>
               <span title="Punkte pro Kosten-Punkt" class="hide-sm" style="width:56px; text-align:right; font-size:12px; color:#7c7568;">{{ r.ratio }} P/K</span>
@@ -329,16 +378,21 @@
         </div>
         <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px;">
           <sc-for list="{{ teamCards }}" as="t" hint-placeholder-count="6">
-            <div style="background:#fffdf8; border:1px solid #e7e1d2; padding:16px 18px; border-radius:16px; box-shadow:0 2px 12px rgba(20,20,20,0.05); display:flex; flex-direction:column; gap:10px;">
-              <div style="display:flex; justify-content:space-between; align-items:baseline; gap:10px;">
-                <strong style="font-size:15px; font-weight:700;">{{ t.name }}</strong>
+            <div class="tdf-card" style="background:#fffdf8; border:none; border-top:4px solid {{ t.accent }}; padding:16px 18px; border-radius:16px; box-shadow:0 2px 12px rgba(20,20,20,0.05); display:flex; flex-direction:column; gap:10px;">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <span style="width:32px; height:32px; border-radius:9px; background:{{ t.accent }}; color:#fffdf8; display:inline-flex; align-items:center; justify-content:center; font-family:'Saira Condensed',sans-serif; font-size:15px; flex:none;">{{ t.rank }}</span>
+                <div style="display:flex; flex-direction:column; gap:1px; flex:1; min-width:0;">
+                  <strong style="font-size:15px; font-weight:700;">{{ t.name }}</strong>
+                  <span style="font-size:11px; color:#7c7568;">{{ t.riderCount }} Fahrer:innen im Rennen</span>
+                </div>
                 <span style="font-size:17px; font-weight:700; flex:none;">{{ t.total }} Pkt</span>
               </div>
-              <div style="height:8px; background:#f1ede2; overflow:hidden; border-radius:999px;"><span style="display:block; height:100%; background:#ffcb00; width:{{ t.barW }};"></span></div>
-              <div style="display:flex; flex-direction:column; gap:4px;">
+              <span class="pbar-track" style="height:8px; background:#f1ede2;"><span class="pbar-fill" style="background:{{ t.accent }}; width:{{ t.barW }};"></span></span>
+              <div style="display:flex; flex-direction:column; gap:6px;">
                 <sc-for list="{{ t.riders }}" as="r" hint-placeholder-count="3">
-                  <div onClick="{{ r.onClick }}" style="display:flex; justify-content:space-between; font-size:13px; cursor:pointer; padding:2px 0;" style-hover="color:#a8850c;">
-                    <span>{{ r.name }}</span><span style="font-weight:600;">{{ r.pts }}</span>
+                  <div onClick="{{ r.onClick }}" style="display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer; padding:2px 0;" style-hover="color:#a8850c;">
+                    <img src="{{ r.avatar }}" width="22" height="22" loading="lazy" referrerpolicy="no-referrer" class="mini-avatar" style="width:22px; height:22px;">
+                    <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ r.name }}</span><span style="font-weight:600; flex:none;">{{ r.pts }}</span>
                   </div>
                 </sc-for>
               </div>
@@ -351,18 +405,24 @@
     <sc-if value="{{ isDuell }}" hint-placeholder-val="{{ false }}">
       <section style="padding-top:20px; display:flex; flex-direction:column; gap:20px;">
         <h2 style="margin:0; font-family:'Saira Condensed',sans-serif; font-weight:700; font-style:italic; text-transform:uppercase; letter-spacing:0.01em; font-size:30px;" class="dc-h2">Duell</h2>
-        <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
-          <select value="{{ duellA }}" onChange="{{ onSelA }}" style="font-family:'Archivo',sans-serif; font-size:15px; font-weight:600; padding:10px 16px; border-radius:12px; border:1px solid #e7e1d2; background:#fffdf8; color:#141414;">
-            <sc-for list="{{ playerNames }}" as="p" hint-placeholder-count="3"><option value="{{ p }}">{{ p }}</option></sc-for>
-          </select>
-          <span style="font-family:'Saira Condensed',sans-serif; font-style:italic; font-size:24px; color:#a8850c;">vs</span>
-          <select value="{{ duellB }}" onChange="{{ onSelB }}" style="font-family:'Archivo',sans-serif; font-size:15px; font-weight:600; padding:10px 16px; border-radius:12px; border:1px solid #e7e1d2; background:#fffdf8; color:#141414;">
-            <sc-for list="{{ playerNames }}" as="p" hint-placeholder-count="3"><option value="{{ p }}">{{ p }}</option></sc-for>
-          </select>
+        <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap; background:#141414; border-radius:16px; padding:16px 20px; box-shadow:0 8px 20px rgba(20,20,20,0.15);">
+          <div style="display:flex; align-items:center; gap:10px; flex:1 1 200px;">
+            <span style="width:38px; height:38px; border-radius:50%; background:#ffcb00; color:#1a1608; display:inline-flex; align-items:center; justify-content:center; font-family:'Saira Condensed',sans-serif; font-size:17px; flex:none;">{{ duellAInitial }}</span>
+            <select value="{{ duellA }}" onChange="{{ onSelA }}" style="font-family:'Archivo',sans-serif; font-size:15px; font-weight:600; padding:10px 14px; border-radius:12px; border:1px solid #2c2c2c; background:#1e1e1e; color:#fffdf8; flex:1;">
+              <sc-for list="{{ playerNames }}" as="p" hint-placeholder-count="3"><option value="{{ p }}">{{ p }}</option></sc-for>
+            </select>
+          </div>
+          <span style="font-family:'Saira Condensed',sans-serif; font-style:italic; font-weight:700; font-size:26px; color:#ffcb00; flex:none;">VS</span>
+          <div style="display:flex; align-items:center; gap:10px; flex:1 1 200px; flex-direction:row-reverse;">
+            <span style="width:38px; height:38px; border-radius:50%; background:#3457c9; color:#fffdf8; display:inline-flex; align-items:center; justify-content:center; font-family:'Saira Condensed',sans-serif; font-size:17px; flex:none;">{{ duellBInitial }}</span>
+            <select value="{{ duellB }}" onChange="{{ onSelB }}" style="font-family:'Archivo',sans-serif; font-size:15px; font-weight:600; padding:10px 14px; border-radius:12px; border:1px solid #2c2c2c; background:#1e1e1e; color:#fffdf8; flex:1; text-align:right;">
+              <sc-for list="{{ playerNames }}" as="p" hint-placeholder-count="3"><option value="{{ p }}">{{ p }}</option></sc-for>
+            </select>
+          </div>
         </div>
-        <div style="background:#fffdf8; border:1px solid #e7e1d2;">
+        <div style="background:#fffdf8; border:1px solid #e7e1d2; border-radius:16px; overflow:hidden; box-shadow:0 2px 12px rgba(20,20,20,0.05);">
           <sc-for list="{{ duellStats }}" as="s" hint-placeholder-count="6">
-            <div style="display:grid; grid-template-columns:1fr 160px 1fr; gap:10px; padding:10px 16px; border-bottom:1px solid #e7e1d2; align-items:center;">
+            <div style="display:grid; grid-template-columns:1fr 160px 1fr; gap:10px; padding:12px 18px; border-bottom:1px solid #e7e1d2; align-items:center; transition:background 0.15s ease;" style-hover="background:#faf6ea;">
               <span style="text-align:right; font-size:15px; font-weight:{{ s.aW }}; color:{{ s.aC }};">{{ s.a }}</span>
               <span style="text-align:center; font-size:12px; letter-spacing:0.1em; text-transform:uppercase; color:#7c7568; font-weight:600;">{{ s.label }}</span>
               <span style="font-size:15px; font-weight:{{ s.bW }}; color:{{ s.bC }};">{{ s.b }}</span>
@@ -377,13 +437,16 @@
             </div>
             <div style="display:flex; flex-direction:column; gap:7px;">
               <sc-for list="{{ duellOnlyA }}" as="r" hint-placeholder-count="4">
-                <div onClick="{{ r.onClick }}" style="cursor:pointer; padding:4px 0;" style-hover="opacity:0.75;">
-                  <div style="display:flex; justify-content:space-between; align-items:baseline; gap:6px; font-size:13px;"><span style="font-weight:600;">{{ r.name }}</span><span style="font-weight:700; flex:none;">{{ r.pts }} <span style="font-weight:400; font-size:11px; color:#7c7568;">· K{{ r.cost }}</span></span></div>
-                  <div style="display:flex; align-items:center; gap:6px; margin-top:2px;">
-                    <span style="flex:1; height:5px; background:#f1ede2; overflow:hidden; border-radius:999px;"><span style="display:block; height:100%; background:#a8850c; width:{{ r.barW }};"></span></span>
-                    <sc-for list="{{ r.badges }}" as="b" hint-placeholder-count="0">
-                      <span title="{{ b.title }}" style="font-size:9px; font-weight:700; letter-spacing:0.02em; text-transform:uppercase; padding:2px 6px; border-radius:999px; background:{{ b.bg }}; color:{{ b.fg }}; border:1px solid {{ b.border }}; flex:none;">{{ b.txt }}</span>
-                    </sc-for>
+                <div onClick="{{ r.onClick }}" style="display:flex; align-items:center; gap:8px; cursor:pointer; padding:4px 0;" style-hover="opacity:0.75;">
+                  <img onClick="{{ r.avatarClick }}" src="{{ r.avatar }}" width="26" height="26" loading="lazy" referrerpolicy="no-referrer" class="mini-avatar" style="width:26px; height:26px; cursor:zoom-in;">
+                  <div style="flex:1; min-width:0;">
+                    <div style="display:flex; justify-content:space-between; align-items:baseline; gap:6px; font-size:13px;"><span style="font-weight:600;">{{ r.name }}</span><span style="font-weight:700; flex:none;">{{ r.pts }} <span style="font-weight:400; font-size:11px; color:#7c7568;">· K{{ r.cost }}</span></span></div>
+                    <div style="display:flex; align-items:center; gap:6px; margin-top:2px;">
+                      <span class="pbar-track" style="flex:1; height:5px; background:#f1ede2;"><span class="pbar-fill pbar-gold" style="width:{{ r.barW }};"></span></span>
+                      <sc-for list="{{ r.badges }}" as="b" hint-placeholder-count="0">
+                        <span title="{{ b.title }}" style="font-size:9px; font-weight:700; letter-spacing:0.02em; text-transform:uppercase; padding:2px 6px; border-radius:999px; background:{{ b.bg }}; color:{{ b.fg }}; border:1px solid {{ b.border }}; flex:none;">{{ b.txt }}</span>
+                      </sc-for>
+                    </div>
                   </div>
                 </div>
               </sc-for>
@@ -396,13 +459,16 @@
             </div>
             <div style="display:flex; flex-direction:column; gap:7px;">
               <sc-for list="{{ duellCommon }}" as="r" hint-placeholder-count="4">
-                <div onClick="{{ r.onClick }}" style="cursor:pointer; padding:4px 0;" style-hover="opacity:0.75;">
-                  <div style="display:flex; justify-content:space-between; align-items:baseline; gap:6px; font-size:13px;"><span style="font-weight:600;">{{ r.name }}</span><span style="font-weight:700; flex:none;">{{ r.pts }} <span style="font-weight:400; font-size:11px; opacity:0.7;">· K{{ r.cost }}</span></span></div>
-                  <div style="display:flex; align-items:center; gap:6px; margin-top:2px;">
-                    <span style="flex:1; height:5px; background:rgba(20,20,20,0.15); overflow:hidden; border-radius:999px;"><span style="display:block; height:100%; background:#1a1608; width:{{ r.barW }};"></span></span>
-                    <sc-for list="{{ r.badges }}" as="b" hint-placeholder-count="0">
-                      <span title="{{ b.title }}" style="font-size:9px; font-weight:700; letter-spacing:0.02em; text-transform:uppercase; padding:2px 6px; border-radius:999px; background:{{ b.bg }}; color:{{ b.fg }}; border:1px solid {{ b.border }}; flex:none;">{{ b.txt }}</span>
-                    </sc-for>
+                <div onClick="{{ r.onClick }}" style="display:flex; align-items:center; gap:8px; cursor:pointer; padding:4px 0;" style-hover="opacity:0.75;">
+                  <img onClick="{{ r.avatarClick }}" src="{{ r.avatar }}" width="26" height="26" loading="lazy" referrerpolicy="no-referrer" class="mini-avatar" style="width:26px; height:26px; cursor:zoom-in;">
+                  <div style="flex:1; min-width:0;">
+                    <div style="display:flex; justify-content:space-between; align-items:baseline; gap:6px; font-size:13px;"><span style="font-weight:600;">{{ r.name }}</span><span style="font-weight:700; flex:none;">{{ r.pts }} <span style="font-weight:400; font-size:11px; opacity:0.7;">· K{{ r.cost }}</span></span></div>
+                    <div style="display:flex; align-items:center; gap:6px; margin-top:2px;">
+                      <span class="pbar-track" style="flex:1; height:5px; background:rgba(20,20,20,0.15);"><span class="pbar-fill pbar-dark" style="width:{{ r.barW }};"></span></span>
+                      <sc-for list="{{ r.badges }}" as="b" hint-placeholder-count="0">
+                        <span title="{{ b.title }}" style="font-size:9px; font-weight:700; letter-spacing:0.02em; text-transform:uppercase; padding:2px 6px; border-radius:999px; background:{{ b.bg }}; color:{{ b.fg }}; border:1px solid {{ b.border }}; flex:none;">{{ b.txt }}</span>
+                      </sc-for>
+                    </div>
                   </div>
                 </div>
               </sc-for>
@@ -415,13 +481,16 @@
             </div>
             <div style="display:flex; flex-direction:column; gap:7px;">
               <sc-for list="{{ duellOnlyB }}" as="r" hint-placeholder-count="4">
-                <div onClick="{{ r.onClick }}" style="cursor:pointer; padding:4px 0;" style-hover="opacity:0.75;">
-                  <div style="display:flex; justify-content:space-between; align-items:baseline; gap:6px; font-size:13px;"><span style="font-weight:600;">{{ r.name }}</span><span style="font-weight:700; flex:none;">{{ r.pts }} <span style="font-weight:400; font-size:11px; color:#7c7568;">· K{{ r.cost }}</span></span></div>
-                  <div style="display:flex; align-items:center; gap:6px; margin-top:2px;">
-                    <span style="flex:1; height:5px; background:#f1ede2; overflow:hidden; border-radius:999px;"><span style="display:block; height:100%; background:#a8850c; width:{{ r.barW }};"></span></span>
-                    <sc-for list="{{ r.badges }}" as="b" hint-placeholder-count="0">
-                      <span title="{{ b.title }}" style="font-size:9px; font-weight:700; letter-spacing:0.02em; text-transform:uppercase; padding:2px 6px; border-radius:999px; background:{{ b.bg }}; color:{{ b.fg }}; border:1px solid {{ b.border }}; flex:none;">{{ b.txt }}</span>
-                    </sc-for>
+                <div onClick="{{ r.onClick }}" style="display:flex; align-items:center; gap:8px; cursor:pointer; padding:4px 0;" style-hover="opacity:0.75;">
+                  <img onClick="{{ r.avatarClick }}" src="{{ r.avatar }}" width="26" height="26" loading="lazy" referrerpolicy="no-referrer" class="mini-avatar" style="width:26px; height:26px; cursor:zoom-in;">
+                  <div style="flex:1; min-width:0;">
+                    <div style="display:flex; justify-content:space-between; align-items:baseline; gap:6px; font-size:13px;"><span style="font-weight:600;">{{ r.name }}</span><span style="font-weight:700; flex:none;">{{ r.pts }} <span style="font-weight:400; font-size:11px; color:#7c7568;">· K{{ r.cost }}</span></span></div>
+                    <div style="display:flex; align-items:center; gap:6px; margin-top:2px;">
+                      <span class="pbar-track" style="flex:1; height:5px; background:#f1ede2;"><span class="pbar-fill pbar-gold" style="width:{{ r.barW }};"></span></span>
+                      <sc-for list="{{ r.badges }}" as="b" hint-placeholder-count="0">
+                        <span title="{{ b.title }}" style="font-size:9px; font-weight:700; letter-spacing:0.02em; text-transform:uppercase; padding:2px 6px; border-radius:999px; background:{{ b.bg }}; color:{{ b.fg }}; border:1px solid {{ b.border }}; flex:none;">{{ b.txt }}</span>
+                      </sc-for>
+                    </div>
                   </div>
                 </div>
               </sc-for>
@@ -472,6 +541,19 @@
             <sc-for list="{{ selBadges }}" as="b" hint-placeholder-count="0">
               <span title="{{ b.title }}" style="font-size:11px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; padding:4px 10px; border-radius:999px; background:{{ b.bg }}; color:{{ b.fg }}; border:1px solid {{ b.border }};">{{ b.txt }}</span>
             </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ selJerseysShow }}" hint-placeholder-val="{{ false }}">
+          <div style="border:1px solid #e7e1d2; border-radius:12px; padding:14px;">
+            <h3 style="margin:0 0 8px 0; font-size:13px; letter-spacing:0.12em; text-transform:uppercase; color:#7c7568;">Trikot-Tipps · die echte Tour 2026</h3>
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              <sc-for list="{{ selJerseys }}" as="j" hint-placeholder-count="5">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 2px;">
+                  <span style="font-size:13px; font-weight:600;">{{ j.label }}</span>
+                  <span style="font-size:12px; font-weight:700; color:{{ j.statusColor }};">{{ j.statusTxt }}</span>
+                </div>
+              </sc-for>
+            </div>
           </div>
         </sc-if>
         <sc-if value="{{ selIsPlayer }}" hint-placeholder-val="{{ false }}">
@@ -528,6 +610,61 @@
       <img src="{{ lightboxImg }}" style="max-width:90vw; max-height:88vh; border-radius:14px; box-shadow:0 24px 70px rgba(0,0,0,0.5); object-fit:contain;">
     </div>
   </sc-if>
+  <sc-if value="{{ wrapped.open }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ wrapped.onBgClick }}" style="position:fixed; inset:0; z-index:9000; background:{{ wrapped.bg }}; color:{{ wrapped.fg }}; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:32px 20px; box-sizing:border-box; cursor:pointer; overflow:hidden; font-family:'Archivo',sans-serif;">
+      <sc-for list="{{ wrapped.blobs }}" as="bl" hint-placeholder-count="4">
+        <div class="wr-blob" style="{{ bl.style }}"></div>
+      </sc-for>
+      <div style="position:absolute; top:18px; left:20px; right:20px; display:flex; gap:6px; z-index:2;">
+        <sc-for list="{{ wrapped.dots }}" as="d" hint-placeholder-count="8">
+          <div onClick="{{ d.onClick }}" style="flex:1; height:4px; border-radius:999px; background:{{ d.bg }}; cursor:pointer;"></div>
+        </sc-for>
+      </div>
+      <button onClick="{{ wrapped.onClose }}" title="Schließen" style="position:absolute; top:16px; right:20px; z-index:2; font-family:'Archivo',sans-serif; font-size:18px; font-weight:700; border:1px solid rgba(128,128,128,0.35); border-radius:999px; background:rgba(128,128,128,0.18); color:inherit; width:38px; height:38px; cursor:pointer; line-height:1; backdrop-filter:blur(6px);">✕</button>
+      <sc-if value="{{ wrapped.canPrev }}" hint-placeholder-val="{{ false }}">
+        <button onClick="{{ wrapped.onPrev }}" title="Zurück" style="position:absolute; left:14px; top:50%; transform:translateY(-50%); z-index:2; font-family:'Archivo',sans-serif; font-size:20px; font-weight:700; border:1px solid rgba(128,128,128,0.3); border-radius:999px; background:rgba(128,128,128,0.15); color:inherit; width:44px; height:44px; cursor:pointer; line-height:1; backdrop-filter:blur(6px);">‹</button>
+      </sc-if>
+      <sc-if value="{{ wrapped.canNext }}" hint-placeholder-val="{{ false }}">
+        <button onClick="{{ wrapped.onNext }}" title="Weiter" style="position:absolute; right:14px; top:50%; transform:translateY(-50%); z-index:2; font-family:'Archivo',sans-serif; font-size:20px; font-weight:700; border:1px solid rgba(128,128,128,0.3); border-radius:999px; background:rgba(128,128,128,0.15); color:inherit; width:44px; height:44px; cursor:pointer; line-height:1; backdrop-filter:blur(6px);">›</button>
+      </sc-if>
+      <div style="width:min(480px,100%); display:flex; flex-direction:column; align-items:center; text-align:center; gap:16px; z-index:2;">
+        <sc-if value="{{ wrapped.hasEmoji }}" hint-placeholder-val="{{ false }}">
+          <span class="wr-emoji" style="font-size:56px; line-height:1; filter:drop-shadow(0 6px 18px rgba(0,0,0,0.25)); animation-duration:{{ wrapped.tEmoji }};">{{ wrapped.emoji }}</span>
+        </sc-if>
+        <sc-if value="{{ wrapped.hasKicker }}" hint-placeholder-val="{{ false }}">
+          <span class="wr-kicker" style="font-size:13px; letter-spacing:0.22em; text-transform:uppercase; font-weight:700; color:{{ wrapped.accent }}; animation-duration:{{ wrapped.tKicker }};">{{ wrapped.kicker }}</span>
+        </sc-if>
+        <h2 class="wr-title" style="margin:0; font-family:'Saira Condensed',sans-serif; font-weight:700; font-style:italic; text-transform:uppercase; font-size:clamp(30px,7vw,52px); line-height:1.02; text-shadow:0 4px 24px rgba(0,0,0,0.18); animation-duration:{{ wrapped.tTitle }};">{{ wrapped.title }}</h2>
+        <sc-if value="{{ wrapped.hasBig }}" hint-placeholder-val="{{ false }}">
+          <div class="wr-big" style="display:flex; flex-direction:column; gap:2px; animation-duration:{{ wrapped.tBig }};">
+            <strong style="font-family:'Saira Condensed',sans-serif; font-style:italic; font-size:clamp(56px,14vw,96px); line-height:1; text-shadow:0 6px 30px rgba(0,0,0,0.2);">{{ wrapped.big }}</strong>
+            <span style="font-size:15px; opacity:0.85;">{{ wrapped.bigSuffix }}</span>
+          </div>
+        </sc-if>
+        <sc-if value="{{ wrapped.hasSub }}" hint-placeholder-val="{{ false }}">
+          <span class="wr-sub" style="font-size:15px; opacity:0.9; max-width:420px; animation-duration:{{ wrapped.tSub }};">{{ wrapped.sub }}</span>
+        </sc-if>
+        <sc-if value="{{ wrapped.hasRows }}" hint-placeholder-val="{{ false }}">
+          <div class="wr-rows" style="width:100%; display:flex; flex-direction:column; gap:8px; margin-top:4px; animation-duration:{{ wrapped.tRows }};">
+            <sc-for list="{{ wrapped.rows }}" as="row" hint-placeholder-count="5">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; padding:10px 16px; border-radius:12px; background:color-mix(in srgb, currentColor 11%, transparent); backdrop-filter:blur(4px);">
+                <span style="font-size:13px; font-weight:600; opacity:0.85;">{{ row.label }}</span>
+                <span style="font-size:14px; font-weight:700;">{{ row.value }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ wrapped.isPersonal }}" hint-placeholder-val="{{ false }}">
+          <div onClick="{{ wrapped.stop }}" style="display:flex; flex-wrap:wrap; justify-content:center; gap:6px; margin-top:4px; cursor:default;">
+            <sc-for list="{{ wrapped.playerPills }}" as="pl" hint-placeholder-count="17">
+              <button onClick="{{ pl.onClick }}" style="font-family:'Archivo',sans-serif; font-size:12px; font-weight:600; padding:6px 12px; border-radius:999px; cursor:pointer; border:1px solid {{ pl.border }}; background:{{ pl.bg }}; color:{{ pl.fg }};">{{ pl.name }}</button>
+            </sc-for>
+          </div>
+        </sc-if>
+        <span class="wr-foot" style="font-size:12px; letter-spacing:0.1em; text-transform:uppercase; opacity:0.6; margin-top:8px; animation-duration:{{ wrapped.tFoot }};">{{ wrapped.footnote }}</span>
+      </div>
+    </div>
+  </sc-if>
   <sc-if value="{{ fireworkActive }}" hint-placeholder-val="{{ false }}">
     <div class="fw-overlay">
       <div class="fw-flash"></div>
@@ -552,13 +689,13 @@
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{&quot;showSparklines&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Ansicht&quot;},&quot;showBadges&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Ansicht&quot;},&quot;defaultTab&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;gesamt&quot;,&quot;options&quot;:[&quot;gesamt&quot;,&quot;etappen&quot;,&quot;fahrer&quot;,&quot;teams&quot;,&quot;duell&quot;,&quot;kanter&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Ansicht&quot;}}">
 class Component extends DCLogic {
-  state = { ready:false, tab:'gesamt', stage:9, sel:null, search:'', sort:'p', duellA:'Richard NB', duellB:'Conni K', qi:0, chartHidden:{}, hoverIdx:null, firework:null, lightbox:null };
+  state = { ready:false, tab:'gesamt', stage:null, sel:null, search:'', sort:'p', duellA:'Richard NB', duellB:'Conni K', qi:0, chartHidden:{}, hoverIdx:null, firework:null, lightbox:null, wrappedOpen:false, wrappedIdx:0, wrappedPlayer:null };
   componentDidMount(){
     import('./data.js?v=4').then(m => {
       this.D = m;
       this.players = m.buildPlayers();
       const t = this.props.defaultTab;
-      this.setState({ ready:true, tab: t || 'gesamt' });
+      this.setState({ ready:true, tab: t || 'gesamt', stage: m.STAGES_DONE });
       this.qTimer = setInterval(()=>{
         if (this.D.QUOTES && this.D.QUOTES.length) this.setState(s=>({ qi:(s.qi+1)%this.D.QUOTES.length }));
       }, 9000);
@@ -566,28 +703,53 @@ class Component extends DCLogic {
   }
   componentWillUnmount(){ if (this.qTimer) clearInterval(this.qTimer); }
   fmt1(v){ return (Math.round(v*10)/10).toString().replace('.', ','); }
+  barGrad(hex){
+    const map = {
+      '#ffcb00':'linear-gradient(90deg,#ffe066,#ffcb00)',
+      '#ddd6c6':'linear-gradient(90deg,#e9e4d8,#ddd6c6)',
+      '#141414':'linear-gradient(90deg,#3a3a3a,#141414)',
+      '#7c7568':'linear-gradient(90deg,#a39c8c,#7c7568)',
+      '#a8850c':'linear-gradient(90deg,#c9a53a,#a8850c)',
+      '#1a1608':'linear-gradient(90deg,#3d3524,#1a1608)',
+    };
+    return map[hex] || ('linear-gradient(90deg,'+hex+','+hex+')');
+  }
+  teamAccent(name){ return 'hsl('+(Math.abs(this.hashCode(name))%360)+',52%,42%)'; }
   badgesFor(p, board){
     const out = [];
+    const lastIdx = this.D.STAGES_DONE - 1;
     const yellow = {bg:'#ffcb00', fg:'#1a1608', border:'#141414'};
     const green = {bg:'#2f8a4e', fg:'#fffdf8', border:'#2f8a4e'};
     const polka = {bg:'#fffdf8', fg:'#d63c2f', border:'#d63c2f'};
     const gray = {bg:'#141414', fg:'#fffdf8', border:'#141414'};
     if (p.lbRank === 1) out.push({txt:'Maillot Jaune', title:'Führt die Gesamtwertung an', ...yellow});
+    if (p.bonus > 0) {
+      const fc = this.D.FINAL_CLASSIFICATION || {};
+      const picks = this.D.RIDERS.filter(r=>r.by.includes(p.n));
+      const hits = [];
+      [['GC','Gelb'],['Mountain','Berg'],['Sprint','Grün'],['Youth','Weiß']].forEach(([key,label])=>{
+        const winner = (fc[key]||[])[0];
+        if (winner && picks.some(r=>r.n===winner.name)) hits.push(label+' ('+winner.name+')');
+      });
+      if (p.tip && fc.TeamRank && fc.TeamRank[0] && fc.TeamRank[0].name === p.tip) hits.push('Mannschaft ('+p.tip+')');
+      out.push({txt:'🎽 Trikot-Bonus +'+p.bonus, title: hits.length ? 'Bonus für getippte Trikot-Sieger:innen: '+hits.join(', ') : 'Bonus für getippte Trikot-Sieger:innen', bg:'#fffdf8', fg:'#a8850c', border:'#a8850c'});
+    }
     const maxBest = Math.max(...board.map(x=>x.best[1]));
-    if (p.best[1] === maxBest) out.push({txt:'Tageshoch '+p.best[1], title:'Höchster Tagesscore der Runde (S0'+p.best[0]+')', ...green});
-    const climbs = board.map(x => ({n:x.n, c:x.ranks[0]-x.ranks[8], r:x.lbRank}));
+    if (p.best[1] === maxBest) out.push({txt:'Tageshoch '+p.best[1], title:'Höchster Tagesscore der Runde ('+this.stageLabel(p.best[0])+')', ...green});
+    const climbs = board.map(x => ({n:x.n, c:x.ranks[0]-x.ranks[lastIdx], r:x.lbRank}));
     const bestClimb = Math.max(...climbs.filter(c=>c.r!==1).map(c=>c.c));
-    const myClimb = p.ranks[0]-p.ranks[8];
+    const myClimb = p.ranks[0]-p.ranks[lastIdx];
     if (p.lbRank !== 1 && myClimb === bestClimb && bestClimb > 0) out.push({txt:'Kletterer +'+myClimb, title:'Stärkster Aufstieg im Ranking seit S01', ...polka});
-    if (p.lbRank === board.length) out.push({txt:'Lanterne Rouge', title:'Letzter Platz — Ehrensache!', ...gray});
+    const lastPlaceRank = board[board.length-1].lbRank;
+    if (p.lbRank === lastPlaceRank) out.push({txt:'Lanterne Rouge', title:'Letzter Platz — Ehrensache!', ...gray});
     const gap = p.best[1]-p.worst[1];
     const minGap = Math.min(...board.map(x=>x.best[1]-x.worst[1]));
     if (gap === minGap) out.push({txt:'Metronom', title:'Konstanteste Leistung: nur '+gap+' Pkt zwischen bestem und schwächstem Tag', bg:'#fffdf8', fg:'#3457c9', border:'#3457c9'});
     const solo = this.D.RIDERS.filter(r=>r.by.length===1 && r.p>0).sort((a,b)=>b.p-a.p)[0];
     if (solo && solo.by[0] === p.n) out.push({txt:'Geheimtipp', title:solo.n+' ('+solo.p+' Pkt) — diesen Pick hat sonst niemand', bg:'#fffdf8', fg:'#8a5ac9', border:'#8a5ac9'});
     if (p.ranks[0] === 1) out.push({txt:'Frühstarter', title:'Rang 1 nach Etappe 1', bg:'#f1ede2', fg:'#141414', border:'#141414'});
-    const maxFall = Math.max(...board.map(x=>x.ranks[8]-x.ranks[0]));
-    const myFall = p.ranks[8]-p.ranks[0];
+    const maxFall = Math.max(...board.map(x=>x.ranks[lastIdx]-x.ranks[0]));
+    const myFall = p.ranks[lastIdx]-p.ranks[0];
     if (maxFall > 0 && myFall === maxFall) out.push({txt:'Gegenwind −'+myFall, title:'Größter Rückfall seit S01 — Zeit für die Aufholjagd!', bg:'#fffdf8', fg:'#7c7568', border:'#7c7568'});
     const pop = x => { const picks = this.D.RIDERS.filter(r=>r.by.includes(x.n)); return picks.length ? picks.reduce((a,r)=>a+r.by.length,0)/picks.length : 99; };
     const minPop = Math.min(...board.map(pop));
@@ -596,11 +758,13 @@ class Component extends DCLogic {
   }
   riderBadgesFor(r, kanterNames, bestValueName){
     const out = [];
-    if (kanterNames.has(r.n)) out.push({txt:'Kanter-Kader', title:'Teil des budget-optimalen Kanter-Kader-Teams (Basis: Etappe S0'+this.D.KANTER_KADER.stage+', Kosten '+r.c+')', bg:'#141414', fg:'#fffdf8', border:'#141414'});
+    if (kanterNames.has(r.n)) out.push({txt:'Kanter-Kader', title:'Teil des budget-optimalen Kanter-Kader-Teams (Basis: Etappe '+this.stageLabel(this.D.KANTER_KADER.stage)+', Kosten '+r.c+')', bg:'#141414', fg:'#fffdf8', border:'#141414'});
     if (bestValueName && r.n === bestValueName) out.push({txt:'Bester Pkt/Kosten', title:'Bestes Punkte-pro-Kosten-Verhältnis der Runde: '+(r.p/r.c).toFixed(2)+' Pkt je Kosten-Punkt', bg:'#ffcb00', fg:'#1a1608', border:'#141414'});
+    if (r.bonus > 0) out.push({txt:'🎽 Trikot-Sieger +'+r.bonus, title:'Bonus für Platz 1 in einer Endwertung (Gelb/Berg/Grün/Weiß/Mannschaft), bereits in den '+r.p+' Pkt enthalten', bg:'#fffdf8', fg:'#a8850c', border:'#a8850c'});
     return out;
   }
   hashCode(str){ let h=0; for (let i=0;i<str.length;i++){ h=(h<<5)-h+str.charCodeAt(i); h|=0; } return h; }
+  stageLabel(n){ return 'S'+String(n).padStart(2,'0'); }
   riderAvatarSrc(r){
     if (r.img) return r.img;
     const initial = (r.n||'?').trim().slice(0,1).toUpperCase();
@@ -622,6 +786,11 @@ class Component extends DCLogic {
     this.setState({ lightbox: r.img });
   }
   closeLightbox(){ this.setState({ lightbox:null }); }
+  openWrapped(){ this.setState({ wrappedOpen:true, wrappedIdx:0, wrappedPlayer:null }); }
+  closeWrapped(){ this.setState({ wrappedOpen:false }); }
+  wrappedNext(){ this.setState(s=>({ wrappedIdx:s.wrappedIdx+1 })); }
+  wrappedPrev(){ this.setState(s=>({ wrappedIdx:Math.max(0, s.wrappedIdx-1) })); }
+  wrappedGoto(i){ this.setState({ wrappedIdx:i }); }
   spark(ranks, w, h, pad){
     const n = ranks.length;
     return ranks.map((r,i)=>{
@@ -640,8 +809,9 @@ class Component extends DCLogic {
     const vbW = vb && vb.width ? vb.width : 680, vbX = vb ? vb.x : 0;
     const relX = (e.clientX - rect.left) / rect.width * vbW + vbX;
     const PX0 = 42, PX1 = 668;
-    let idx = Math.round((relX - PX0) / ((PX1 - PX0) / 8));
-    idx = Math.max(0, Math.min(8, idx));
+    const lastIdx = Math.max(1, (this.D ? this.D.STAGES_DONE : 1) - 1);
+    let idx = Math.round((relX - PX0) / ((PX1 - PX0) / lastIdx));
+    idx = Math.max(0, Math.min(lastIdx, idx));
     if (idx !== this.state.hoverIdx) this.setState({ hoverIdx: idx });
   }
   chartLeave(){ if (this.state.hoverIdx !== null) this.setState({ hoverIdx: null }); }
@@ -726,12 +896,16 @@ class Component extends DCLogic {
   }
   renderVals(){
     const S = this.state;
-    if (!S.ready || !this.players) return { ready:false, tabs:[], rows:[], stagePills:[], stageRows:[], gridLines:[], chartLines:[], chartX:[], chartLegend:[], chartDots:[], topPicks:[], riderRows:[], teamCards:[], playerNames:[], duellStats:[], duellOnlyA:[], duellOnlyB:[], duellCommon:[], drawerOpen:false, quoteTxt:'', quoteBy:'', quoteRank:'', isGesamt:true, isEtappen:false, isFahrer:false, isTeams:false, isDuell:false, isKanter:false, showSparklines:true, stageDone:9, stageTotal:21, progressPct:'42.9%', leaderName:'…', leaderPts:'…', search:'', selBadges:[], selStats:[], selRiders:[], selBy:[], selRankRow:[], selAvatar:'', selAvatarClick:()=>{}, kanterHasData:false, kanterRows:[], kanterTeamTipTxt:'', kanterTotalCost:0, kanterTotalPoints:0, kanterBudgetLeft:560, kanterRiderCount:0, kanterStage:9, kanterIsFixedStage:false, kanterFixedSummary:'', hoverActive:false, hoverLineX:0, hoverDots2:[], hoverBox:{leftPct:'0%',topPct:'0%',title:'',rows:[],moreTxt:''}, chartHover:()=>{}, chartLeave:()=>{}, duellOnlyASum:0, duellOnlyBSum:0, duellCommonSum:0, duellOnlyACount:0, duellOnlyBCount:0, duellCommonCount:0, fireworkActive:false, fireworkBursts:[], fireworkConfetti:[], fireworkText:'', lightboxActive:false, lightboxImg:'' };
+    if (!S.ready || !this.players) return { ready:false, tabs:[], rows:[], stagePills:[], stageRows:[], gridLines:[], chartLines:[], chartX:[], chartLegend:[], chartDots:[], leaderAreaPts:'', topPicks:[], riderRows:[], teamCards:[], playerNames:[], duellStats:[], duellOnlyA:[], duellOnlyB:[], duellCommon:[], drawerOpen:false, quoteTxt:'', quoteBy:'', quoteRank:'', isGesamt:true, isEtappen:false, isFahrer:false, isTeams:false, isDuell:false, isKanter:false, showSparklines:true, stageDone:9, stageTotal:21, progressPct:'42.9%', leaderName:'…', leaderPts:'…', stageWinnerInitial:'', duellAInitial:'', duellBInitial:'', search:'', selBadges:[], selStats:[], selRiders:[], selBy:[], selRankRow:[], selAvatar:'', selAvatarClick:()=>{}, selJerseys:[], selJerseysShow:false, kanterHasData:false, kanterRows:[], kanterTeamTipTxt:'', kanterTotalCost:0, kanterTotalPoints:0, kanterBudgetLeft:560, kanterRiderCount:0, kanterStage:9, kanterIsFixedStage:false, kanterFixedSummary:'', hoverActive:false, hoverLineX:0, hoverDots2:[], hoverBox:{leftPct:'0%',topPct:'0%',title:'',rows:[],moreTxt:''}, chartHover:()=>{}, chartLeave:()=>{}, duellOnlyASum:0, duellOnlyBSum:0, duellCommonSum:0, duellOnlyACount:0, duellOnlyBCount:0, duellCommonCount:0, fireworkActive:false, fireworkBursts:[], fireworkConfetti:[], fireworkText:'', lightboxActive:false, lightboxImg:'', tourComplete:false, openWrapped:()=>{}, wrapped:{ open:false, bg:'#141414', fg:'#fffdf8', accent:'#ffcb00', kicker:'', title:'', big:'', bigSuffix:'', sub:'', rows:[], isPersonal:false, playerPills:[], footnote:'', idx:0, total:0, canPrev:false, canNext:false, onPrev:()=>{}, onNext:()=>{}, onClose:()=>{}, onBgClick:()=>{}, dots:[], blobs:[], hasEmoji:false, emoji:'', tEmoji:'0.6s', tKicker:'0.5s', tTitle:'0.55s', tBig:'0.6s', tSub:'0.5s', tRows:'0.5s', tFoot:'0.5s' } };
     const D = this.D, RD = D.RIDERS;
     const showSparklines = this.props.showSparklines ?? true;
     const showBadges = this.props.showBadges ?? true;
-    const board = [...this.players].sort((a,b)=>b.total-a.total || a.ranks[8]-b.ranks[8]);
-    board.forEach((p,i)=>{ p.lbRank = i+1; });
+    const lastIdx = D.STAGES_DONE - 1;
+    const board = [...this.players].sort((a,b)=>b.total-a.total || a.ranks[lastIdx]-b.ranks[lastIdx]);
+    // Standard-Competition-Ranking ("1224"): Gleichstand teilt sich den
+    // Platz, die naechste Zeile springt danach entsprechend weiter (Platz 2
+    // bleibt leer, wenn es zwei Erstplatzierte gibt).
+    board.forEach((p,i)=>{ p.lbRank = (i>0 && p.total===board[i-1].total) ? board[i-1].lbRank : i+1; });
     const byName = {}; board.forEach(p=>{ byName[p.n]=p; });
     const riderByName = {}; RD.forEach(r=>{ riderByName[r.n]=r; });
     const leader = board[0];
@@ -740,7 +914,7 @@ class Component extends DCLogic {
       bg: S.tab===k ? '#ffcb00' : '#fffdf8', fg: S.tab===k ? '#1a1608' : '#141414', border: S.tab===k ? '#ffcb00' : '#e7e1d2',
       onClick: ()=>this.setState({tab:k}) }));
     const rows = board.map(p=>{
-      const delta = p.ranks[7]-p.ranks[8];
+      const delta = lastIdx>0 ? p.ranks[lastIdx-1]-p.ranks[lastIdx] : 0;
       return {
         rank: p.lbRank, name: p.n, initial: p.n.slice(0,1),
         total: p.total, avg: this.fmt1(p.avg),
@@ -766,7 +940,7 @@ class Component extends DCLogic {
         rank: '', name: 'Kanter-Kader', initial: 'K',
         total: kkg.totalPoints, avg: this.fmt1(kkg.totalPoints / D.STAGES_DONE),
         deltaTxt: '·', deltaColor: '#7c7568',
-        badges: [{ txt:'Budget-optimal', title:'Bis zu 15 Fahrer:innen + optionaler Team-Tipp, Kosten ≤ 560 — mit Kenntnis bis Etappe S0'+kkg.stage+' optimiert (feste Referenz, siehe Tab Kanter-Kader)', bg:'#141414', fg:'#fffdf8', border:'#141414' }],
+        badges: [{ txt:'Budget-optimal', title:'Bis zu 15 Fahrer:innen + optionaler Team-Tipp, Kosten ≤ 560 — mit Kenntnis bis Etappe '+this.stageLabel(kkg.stage)+' optimiert (feste Referenz, siehe Tab Kanter-Kader)', bg:'#141414', fg:'#fffdf8', border:'#141414' }],
         spark: '', sparkColor: '#141414',
         bg: '#f1ede2', rankColor: '#141414',
         avatarBg: '#141414', avatarFg: '#ffcb00',
@@ -778,7 +952,7 @@ class Component extends DCLogic {
     }
     // Etappen
     const stagePills = Array.from({length:D.STAGES_DONE}, (_,i)=>({
-      label:'S0'+(i+1), active:S.stage===i+1,
+      label:this.stageLabel(i+1), active:S.stage===i+1,
       bg: S.stage===i+1 ? '#ffcb00' : '#fffdf8', fg: S.stage===i+1 ? '#1a1608' : '#141414', border: S.stage===i+1 ? '#ffcb00' : '#e7e1d2',
       onClick: ()=>this.setState({stage:i+1}) }));
     const si = S.stage-1;
@@ -786,11 +960,13 @@ class Component extends DCLogic {
     const maxSt = Math.max(1, stSorted[0].stages[si]);
     const stageRows = stSorted.map((p,i)=>({
       pos:i+1, name:p.n, pts:p.stages[si], cumRankTxt:'Gesamt: '+p.ranks[si]+'.',
+      initial:p.n.slice(0,1), avatarBg: i===0 ? '#ffcb00' : '#f1ede2', avatarFg: i===0 ? '#1a1608' : '#141414',
       barW: Math.round(p.stages[si]/maxSt*100)+'%',
-      barColor: i===0 ? '#ffcb00' : '#ddd6c6',
+      barColor: this.barGrad(i===0 ? '#ffcb00' : '#ddd6c6'),
       onClick: ()=>this.openPlayer(p.n) }));
-    const stageWinner = stSorted[0].n + ' · Etappe S0' + S.stage;
+    const stageWinner = stSorted[0].n + ' · Etappe ' + this.stageLabel(S.stage);
     const stageWinnerPts = stSorted[0].stages[si];
+    const stageWinnerInitial = stSorted[0].n.slice(0,1);
     // Kanter-Kader: zwei virtuelle Zeilen in Punkte pro Etappe — nicht die
     // kumulierten Punkte, sondern was das jeweilige Team GENAU an diesem Tag
     // gemacht hat (wie bei den echten Spieler:innen). Einmal das für GENAU
@@ -813,13 +989,16 @@ class Component extends DCLogic {
     const kkFixed = D.KANTER_KADER;
     const kkStageRows = [];
     if (kkStageOpt && kkFixed && kkStageOpt.stage === kkFixed.stage) {
-      kkStageRows.push({ pos:'', name:'Kanter-Kader · S0'+kkFixed.stage+' (fix)', pts:teamDayPts(kkFixed), cumRankTxt:'virtuell',
-        barColor:'#141414', onClick:()=>this.setState({tab:'kanter'}) });
+      kkStageRows.push({ pos:'', name:'Kanter-Kader · '+this.stageLabel(kkFixed.stage)+' (fix)', pts:teamDayPts(kkFixed), cumRankTxt:'virtuell',
+        initial:'K', avatarBg:'#141414', avatarFg:'#ffcb00',
+        barColor:this.barGrad('#141414'), onClick:()=>this.setState({tab:'kanter'}) });
     } else {
-      if (kkStageOpt) kkStageRows.push({ pos:'', name:'Kanter-Kader · bis S0'+kkStageOpt.stage, pts:teamDayPts(kkStageOpt), cumRankTxt:'virtuell',
-        barColor:'#141414', onClick:()=>this.setState({tab:'kanter'}) });
-      if (kkFixed) kkStageRows.push({ pos:'', name:'Kanter-Kader · fix S0'+kkFixed.stage, pts:teamDayPts(kkFixed), cumRankTxt:'virtuell',
-        barColor:'#7c7568', onClick:()=>this.setState({tab:'kanter'}) });
+      if (kkStageOpt) kkStageRows.push({ pos:'', name:'Kanter-Kader · bis '+this.stageLabel(kkStageOpt.stage), pts:teamDayPts(kkStageOpt), cumRankTxt:'virtuell',
+        initial:'K', avatarBg:'#141414', avatarFg:'#ffcb00',
+        barColor:this.barGrad('#141414'), onClick:()=>this.setState({tab:'kanter'}) });
+      if (kkFixed) kkStageRows.push({ pos:'', name:'Kanter-Kader · fix '+this.stageLabel(kkFixed.stage), pts:teamDayPts(kkFixed), cumRankTxt:'virtuell',
+        initial:'K', avatarBg:'#7c7568', avatarFg:'#fffdf8',
+        barColor:this.barGrad('#7c7568'), onClick:()=>this.setState({tab:'kanter'}) });
     }
     const maxStAll = Math.max(maxSt, ...kkStageRows.map(r=>r.pts), 1);
     kkStageRows.forEach(row => {
@@ -831,7 +1010,7 @@ class Component extends DCLogic {
     const kk = D.KANTER_KADER;
     const maxCum = Math.max(...board.map(p=>p.total), kk ? kk.totalPoints : 0);
     const PX0 = 42, PX1 = 668, PY0 = 14, PY1 = 262;
-    const cx = i => PX0 + i*((PX1-PX0)/8);
+    const cx = i => PX0 + i*((PX1-PX0)/Math.max(1,lastIdx));
     const cy = v => PY1 - v/maxCum*(PY1-PY0);
     const palette = ['#d63c2f','#2f8a4e','#3457c9','#a8850c','#8a5ac9','#c98f4b','#0f9b9b','#c9407e','#5a7d1f','#b5462f','#3f6fb0','#7a5cc9','#2f8f6a','#b07a1f','#c44a9a','#4f8a2f','#9a4f3f'];
     const hidden = S.chartHidden || {};
@@ -841,7 +1020,7 @@ class Component extends DCLogic {
       if (hidden[p.n]) return;
       const col = palette[idx % palette.length];
       lines.push({ pts: p.cum.map((v,i)=>cx(i).toFixed(1)+','+cy(v).toFixed(1)).join(' '), color:col, w: p.lbRank<=3?3:2, o:1, dash:'' });
-      dots.push({ x:cx(8).toFixed(1), y:cy(p.total).toFixed(1), color:col, o:1 });
+      dots.push({ x:cx(lastIdx).toFixed(1), y:cy(p.total).toFixed(1), color:col, o:1 });
     });
     const kkHidden = !!hidden['Kanter-Kader'];
     if (kk && !kkHidden){
@@ -849,10 +1028,16 @@ class Component extends DCLogic {
       dots.push({ x:cx(kk.cum.length-1).toFixed(1), y:cy(kk.cum[kk.cum.length-1]).toFixed(1), color:'#141414', o:1 });
     }
     const chartLines = lines, chartDots = dots;
+    // Sanfte Flächenfüllung unter der Linie der/des Erstplatzierten, rein
+    // dekorativ (gibt dem Chart mehr Tiefe) -- Polygon aus Kurve + Basislinie.
+    const leaderAreaPts = board.length
+      ? board[0].cum.map((v,i)=>cx(i).toFixed(1)+','+cy(v).toFixed(1)).join(' ')
+        + ' ' + cx(lastIdx).toFixed(1)+','+PY1 + ' ' + cx(0).toFixed(1)+','+PY1
+      : '';
     const step = maxCum > 400 ? 100 : 50;
     const yTicks = []; for (let v=0; v<=maxCum; v+=step) yTicks.push(v);
     const gridLines = yTicks.map(v=>({ y:cy(v).toFixed(1), ty:(cy(v)+4).toFixed(1), label:''+v }));
-    const chartX = Array.from({length:9},(_,i)=>({ x:cx(i).toFixed(1), label:'S0'+(i+1) }));
+    const chartX = Array.from({length:D.STAGES_DONE},(_,i)=>({ x:cx(i).toFixed(1), label:this.stageLabel(i+1) }));
     const chartLegend = board.map((p,idx)=>{
       const col = palette[idx % palette.length];
       const off = !!hidden[p.n];
@@ -883,10 +1068,10 @@ class Component extends DCLogic {
       // rendert — reine Prozent-Positionierung über dem responsive skalierten
       // SVG (viewBox 680x300 = 1:1 auf die Container-Prozente übertragbar).
       let leftPct = (parseFloat(hoverLineX) / 680 * 100);
-      leftPct = Math.max(4, Math.min(74, hi <= 4 ? leftPct + 2 : leftPct - 22));
+      leftPct = Math.max(4, Math.min(74, hi <= lastIdx/2 ? leftPct + 2 : leftPct - 22));
       hoverBox = {
         leftPct: leftPct.toFixed(1)+'%', topPct: '5%',
-        title: 'S0'+(hi+1),
+        title: this.stageLabel(hi+1),
         rows: shown.map(e=>({ color:e.color, name: e.name.length>18 ? e.name.slice(0,17)+'…' : e.name, val:e.val, dayTxt:'+'+e.day })),
         moreTxt: entries.length>shown.length ? '+'+(entries.length-shown.length)+' weitere' : '',
       };
@@ -897,8 +1082,12 @@ class Component extends DCLogic {
     // für die letzte Etappe optimierte Team (KANTER_KADER) verwendet.
     const kanterTeam = D.OPTIMAL_TEAMS ? D.OPTIMAL_TEAMS[S.stage - 1] : null;
     const kanterHasData = !!kanterTeam;
-    const kanterRows = kanterHasData ? kanterTeam.riders.map(r=>({
-      name:r.n, team:r.t, cost:r.c, pts:r.p, onClick:this.kanterMaxClick(r.n) })) : [];
+    const kanterRows = kanterHasData ? kanterTeam.riders.map(r=>{
+      const full = riderByName[r.n] || {n:r.n};
+      return { name:r.n, team:r.t, cost:r.c, pts:r.p,
+        avatar: this.riderAvatarSrc(full), avatarClick: e=>this.openLightbox(full, e),
+        onClick:this.kanterMaxClick(r.n) };
+    }) : [];
     const kanterTeamTipTxt = kanterHasData
       ? (kanterTeam.team ? kanterTeam.team+' (Kosten '+kanterTeam.teamCost+', '+kanterTeam.teamPoints+' Pkt)' : 'keiner — bringt weniger Punkte pro Kosten als die Fahrer')
       : '';
@@ -908,7 +1097,7 @@ class Component extends DCLogic {
     const kanterRiderCount = kanterRows.length;
     const kanterIsFixedStage = !!(kk && kanterHasData && kanterTeam.stage === kk.stage);
     const kanterFixedSummary = kk
-      ? 'S0'+kk.stage+' · '+kk.totalPoints+' Pkt · '+kk.totalCost+' Kosten'+(kk.team ? ' · Team-Tipp: '+kk.team : '')
+      ? this.stageLabel(kk.stage)+' · '+kk.totalPoints+' Pkt · '+kk.totalCost+' Kosten'+(kk.team ? ' · Team-Tipp: '+kk.team : '')
       : '';
     // Fahrer
     const kanterNames = new Set(kk ? kk.riders.map(r=>r.n) : []);
@@ -945,12 +1134,13 @@ class Component extends DCLogic {
     const teamCards = Object.entries(teamMap).map(([name,rs])=>{
       const total = rs.reduce((a,r)=>a+r.p,0);
       const tippers = board.filter(p=>p.tip===name).map(p=>p.n);
-      return { name, total,
+      return { name, total, accent: this.teamAccent(name), riderCount: rs.length,
         barW: Math.round(total/Math.max(1,maxTeam)*100)+'%',
-        riders: rs.sort((a,b)=>b.p-a.p).slice(0,4).map(r=>({name:r.n, pts:r.p, onClick:this.kanterMaxClick(r.n)})),
+        riders: rs.sort((a,b)=>b.p-a.p).slice(0,4).map(r=>({
+          name:r.n, pts:r.p, avatar:this.riderAvatarSrc(r), onClick:this.kanterMaxClick(r.n) })),
         tipPts: D.TEAM_TIP_PTS[name] || 0,
         tipBy: tippers.length ? tippers.join(', ') : 'niemand' };
-    }).sort((a,b)=>b.total-a.total);
+    }).sort((a,b)=>b.total-a.total).map((t,i)=>({ ...t, rank:i+1 }));
     // Duell
     const playerNames = board.map(p=>p.n);
     const A = byName[S.duellA] || board[0], B = byName[S.duellB] || board[1];
@@ -977,9 +1167,11 @@ class Component extends DCLogic {
     const maxPickPts = Math.max(1, ...RD.map(r=>r.p));
     const mkPick = r => ({
       name:r.n, pts:r.p, cost:r.c,
+      avatar: this.riderAvatarSrc(r), avatarClick: e=>this.openLightbox(r, e),
       barW: Math.round(r.p/maxPickPts*100)+'%',
       badges: this.riderBadgesFor(r, kanterNames, bestValueName),
       onClick:this.kanterMaxClick(r.n) });
+    const duellAInitial = A.n.slice(0,1), duellBInitial = B.n.slice(0,1);
     const srt = (a,b)=>b.p-a.p;
     const sumPts = list => list.reduce((s,r)=>s+r.p, 0);
     const onlyARaw = pa.filter(r=>!pbSet.has(r.n)).sort(srt);
@@ -991,7 +1183,37 @@ class Component extends DCLogic {
     const duellOnlyASum = sumPts(onlyARaw), duellOnlyBSum = sumPts(onlyBRaw), duellCommonSum = sumPts(commonRaw);
     const duellOnlyACount = onlyARaw.length, duellOnlyBCount = onlyBRaw.length, duellCommonCount = commonRaw.length;
     // Drawer
-    let drawer = { drawerOpen:false, selKind:'', selTitle:'', selSub:'', selStats:[], selBadges:[], selBadgesShow:false, selIsPlayer:false, selIsRider:false, selAvatar:'', selAvatarClick:()=>{}, selSpark:'', selRankRow:[], selRiders:[], selBy:[], selByCount:'' };
+    // Bezug der Spieler:innen-Tipps zu den echten Abschluss-Trikots der Tour
+    // (S22 GC .. S26 TeamRank in der xlsx) — für jede/n Tippende/n sichtbar
+    // im Spieler-Drawer: hat sie/er den/die spätere/n Trikotträger:in getippt?
+    const fc = D.FINAL_CLASSIFICATION || {};
+    const jerseyDefs = [
+      {key:'GC', label:'🟡 Gelbes Trikot (GC)', isTeam:false},
+      {key:'Mountain', label:'🔺 Bergtrikot', isTeam:false},
+      {key:'Sprint', label:'🟢 Grünes Trikot', isTeam:false},
+      {key:'Youth', label:'⚪ Weißes Trikot', isTeam:false},
+      {key:'TeamRank', label:'👥 Team-Wertung', isTeam:true},
+    ];
+    const jerseyHitsFor = (p, picks) => jerseyDefs.map(jd => {
+      const arr = fc[jd.key] || [];
+      if (!arr.length) return null;
+      let best = null;
+      if (jd.isTeam) {
+        if (p.tip) best = arr.find(x => x.name === p.tip) || null;
+      } else {
+        for (const entry of arr) {
+          if (picks.some(r => r.n === entry.name) && (!best || entry.place < best.place)) best = entry;
+        }
+      }
+      const bonusPts = (D.CLASSIFICATION_BONUS || {})[jd.key] || 0;
+      const won = best && best.place === 1 && bonusPts > 0;
+      return {
+        label: jd.label,
+        statusTxt: best ? 'Platz '+best.place+' · '+best.name+(won ? ' (+'+bonusPts+' Pkt)' : '') : 'kein Pick platziert',
+        statusColor: best ? '#2f8a4e' : '#7c7568',
+      };
+    }).filter(Boolean);
+    let drawer = { drawerOpen:false, selKind:'', selTitle:'', selSub:'', selStats:[], selBadges:[], selBadgesShow:false, selIsPlayer:false, selIsRider:false, selAvatar:'', selAvatarClick:()=>{}, selSpark:'', selRankRow:[], selRiders:[], selBy:[], selByCount:'', selJerseys:[], selJerseysShow:false };
     if (S.sel && S.sel.type==='player' && byName[S.sel.n]){
       const p = byName[S.sel.n];
       const picks = RD.filter(r=>r.by.includes(p.n));
@@ -999,20 +1221,21 @@ class Component extends DCLogic {
       const localBestValue = pickedCosted.length
         ? pickedCosted.reduce((a,b)=> (b.p/b.c > a.p/a.c ? b : a))
         : null;
+      const jerseyHits = jerseyHitsFor(p, picks);
       drawer = { drawerOpen:true, selKind:'Spieler:in · Rang '+p.lbRank, selTitle:p.n,
         selSub: p.tip ? 'Team-Tipp: '+p.tip+' ('+p.tipPts+' Pkt)' : 'Kein Team-Tipp hinterlegt',
         selStats: [
-          {label:'Punkte', value:p.total},
+          {label:'Punkte', value: p.bonus>0 ? (p.total-p.bonus)+' + '+p.bonus+' 🎽 = '+p.total : p.total},
           {label:'Ø / Etappe', value:this.fmt1(p.avg)},
           {label:'Rang', value:p.lbRank+'.'},
-          {label:'Bester Tag', value:'S0'+p.best[0]+' · '+p.best[1]},
-          {label:'Schwächster', value:'S0'+p.worst[0]+' · '+p.worst[1]},
+          {label:'Bester Tag', value:this.stageLabel(p.best[0])+' · '+p.best[1]},
+          {label:'Schwächster', value:this.stageLabel(p.worst[0])+' · '+p.worst[1]},
           {label:'Picks', value:RD.filter(r=>r.by.includes(p.n)).length},
         ],
         selBadges: this.badgesFor(p, board), selBadgesShow: this.badgesFor(p, board).length>0,
         selIsPlayer:true, selIsRider:false,
         selSpark: this.spark(p.ranks, 400, 120, 12),
-        selRankRow: p.ranks.map((r,i)=>({stage:'S0'+(i+1), rank:r})),
+        selRankRow: p.ranks.map((r,i)=>({stage:this.stageLabel(i+1), rank:r})),
         selRiders: picks.sort((a,b)=>b.p-a.p).map(r=>{
           const badges = this.riderBadgesFor(r, kanterNames, bestValueName);
           if (localBestValue && r.n === localBestValue.n && r.n !== bestValueName) badges.unshift({
@@ -1020,16 +1243,17 @@ class Component extends DCLogic {
             bg:'#ffcb00', fg:'#1a1608', border:'#141414' });
           return { name:r.n, team:r.t, pts:r.p, cost:r.c, badges, onClick:this.kanterMaxClick(r.n) };
         }),
-        selBy:[], selByCount:'' };
+        selBy:[], selByCount:'',
+        selJerseys: jerseyHits, selJerseysShow: jerseyHits.length>0 };
     } else if (S.sel && S.sel.type==='rider' && riderByName[S.sel.n]){
       const r = riderByName[S.sel.n];
       const rBadges = this.riderBadgesFor(r, kanterNames, bestValueName);
       drawer = { drawerOpen:true, selKind:'Fahrer · Nr. '+r.b, selTitle:r.n, selSub:r.t+' · '+r.s+' · '+r.a+' Jahre',
         selStats: [
-          {label:'Punkte', value:r.p},
-          {label:'Ø / Etappe', value:this.fmt1(r.p/9)},
+          {label:'Punkte', value: r.bonus>0 ? (r.p-r.bonus)+' + '+r.bonus+' 🎽 = '+r.p : r.p},
+          {label:'Ø / Etappe', value:this.fmt1(r.p/D.STAGES_DONE)},
           {label:'Kosten', value: r.c ?? '—'},
-          {label:'Bester Tag', value: r.bd ? 'S0'+r.bd[0]+' · '+r.bd[1] : '—'},
+          {label:'Bester Tag', value: r.bd ? this.stageLabel(r.bd[0])+' · '+r.bd[1] : '—'},
         ],
         selBadges: rBadges, selBadgesShow: rBadges.length>0, selIsPlayer:false, selIsRider:true,
         selAvatar: this.riderAvatarSrc(r), selAvatarClick: e=>this.openLightbox(r, e),
@@ -1037,16 +1261,153 @@ class Component extends DCLogic {
         selBy: r.by.map(n=>({name:n, onClick:()=>this.openPlayer(n)})),
         selByCount: r.by.length ? r.by.length+' Spieler:innen' : 'niemandem getippt' };
     }
+    // Season-Recap ("Wrapped"): Slideshow mit den prägnantesten Stats der
+    // Runde, freigeschaltet sobald die Tour komplett gefahren ist.
+    const tourComplete = D.STAGES_DONE >= D.STAGES_TOTAL;
+    const mkSlide = (s) => {
+      const m = {
+        bg:'#141414', fg:'#fffdf8', accent:'#ffcb00', blobTint:'rgba(255,255,255,0.35)',
+        emoji:'', kicker:'', title:'', big:'', bigSuffix:'', sub:'',
+        rows:[], isPersonal:false, playerPills:[], footnote:'weiter →', ...s,
+      };
+      return { ...m, hasBig: m.big !== '', hasRows: m.rows.length > 0, hasSub: m.sub !== '', hasKicker: m.kicker !== '', hasEmoji: m.emoji !== '' };
+    };
+    const champ = board[0], last = board[board.length-1];
+    const medal = i => i===0 ? '🥈' : i===1 ? '🥉' : (i+2)+'.';
+    const wrappedSlides = [];
+    wrappedSlides.push(mkSlide({
+      bg:'radial-gradient(circle at 25% 18%, #2c2c2c 0%, #141414 55%, #050505 100%)',
+      emoji:'🚴', kicker:'TOUR DE FRANCE 2026 · TIPPRUNDE', title:'Dein Saison-Rückblick',
+      big:D.STAGES_DONE+'/'+D.STAGES_TOTAL, bigSuffix:'Etappen gefahren',
+      sub:board.length+' Spieler:innen · '+D.RIDERS.length+' getippte Fahrer · ein Sieger',
+    }));
+    wrappedSlides.push(mkSlide({
+      bg:'radial-gradient(circle at 75% 15%, #fff35c 0%, #ffcb00 55%, #c99a00 100%)',
+      fg:'#1a1608', accent:'#141414', blobTint:'rgba(20,20,20,0.22)',
+      emoji:'🏆', kicker:'MAILLOT JAUNE DER TIPPRUNDE',
+      title:champ.n, big:champ.total, bigSuffix:'Punkte · Ø '+this.fmt1(champ.avg)+' / Etappe',
+      sub: board[1] ? 'Vorsprung auf Platz 2: '+(champ.total-board[1].total)+' Punkte' : '',
+      rows: board.slice(1,4).map((p,i)=>({label:medal(i), value:p.n+' · '+p.total+' Pkt'})),
+    }));
+    if (D.KANTER_KADER) {
+      const kk = D.KANTER_KADER;
+      const diff = kk.totalPoints - champ.total;
+      wrappedSlides.push(mkSlide({
+        bg:'radial-gradient(circle at 20% 82%, #2c2c2c 0%, #141414 60%, #000 100%)',
+        emoji:'💰', kicker:'BUDGET-OPTIMALES TEAM', title:'Kanter-Kader',
+        big:kk.totalPoints, bigSuffix:'Punkte (hypothetisch)',
+        sub:(diff>=0?'+':'')+diff+' Punkte '+(diff>=0?'mehr':'weniger')+' als der echte Sieger · Kosten '+kk.totalCost+'/560',
+        rows: kk.riders.slice(0,5).map(r=>({label:r.n, value:r.p+' Pkt'})),
+      }));
+    }
+    wrappedSlides.push(mkSlide({
+      bg:'radial-gradient(circle at 50% 20%, #948b7a 0%, #7c7568 55%, #524d42 100%)',
+      emoji:'🔴', kicker:'LANTERNE ROUGE', title:last.n,
+      big:last.total, bigSuffix:'Punkte — Ehrensache!',
+      sub:'Platz '+last.lbRank+' von '+board.length,
+    }));
+    const jerseyRows = [
+      fc.GC && fc.GC[0] && {label:'🟡 Gelbes Trikot (GC)', value:fc.GC[0].name},
+      fc.Mountain && fc.Mountain[0] && {label:'🔺 Bergtrikot', value:fc.Mountain[0].name},
+      fc.Sprint && fc.Sprint[0] && {label:'🟢 Grünes Trikot', value:fc.Sprint[0].name},
+      fc.Youth && fc.Youth[0] && {label:'⚪ Weißes Trikot', value:fc.Youth[0].name},
+      fc.TeamRank && fc.TeamRank[0] && {label:'👥 Team-Wertung', value:fc.TeamRank[0].name},
+    ].filter(Boolean);
+    if (jerseyRows.length) {
+      wrappedSlides.push(mkSlide({
+        bg:'radial-gradient(circle at 30% 8%, #fffdf8 0%, #f3efe5 60%, #e7e1d2 100%)',
+        fg:'#141414', accent:'#a8850c', blobTint:'rgba(255,203,0,0.4)',
+        emoji:'🎽', kicker:'DIE ECHTE TOUR 2026',
+        title:'Die Sieger', sub:'So ging die echte Tour aus', rows:jerseyRows,
+      }));
+    }
+    const record = board.reduce((a,b)=> b.best[1]>a.best[1] ? b : a);
+    wrappedSlides.push(mkSlide({
+      bg:'radial-gradient(circle at 70% 82%, #57c97e 0%, #2f8a4e 55%, #175027 100%)',
+      emoji:'⚡', kicker:'TAGESHOCH DER RUNDE', title:record.n,
+      big:record.best[1], bigSuffix:'Punkte an '+this.stageLabel(record.best[0]),
+      sub:'Bester Einzeltag der gesamten Runde',
+    }));
+    const solo = RD.filter(r=>r.by.length===1 && r.p>0).sort((a,b)=>b.p-a.p)[0];
+    if (solo) {
+      wrappedSlides.push(mkSlide({
+        bg:'radial-gradient(circle at 25% 78%, #b085e0 0%, #8a5ac9 55%, #4f3170 100%)',
+        emoji:'🕵️', kicker:'GEHEIMTIPP DER RUNDE', title:solo.n,
+        big:solo.p, bigSuffix:'Punkte',
+        sub:'Diesen Pick hat sonst niemand gewagt — nur '+solo.by[0],
+      }));
+    }
+    const wrappedSelName = S.wrappedPlayer || champ.n;
+    const selPlayer = byName[wrappedSelName];
+    const selBadges = selPlayer ? this.badgesFor(selPlayer, board) : [];
+    const selEmoji = !selPlayer ? '👤' : selPlayer.lbRank===1 ? '🥇' : selPlayer.lbRank===2 ? '🥈' : selPlayer.lbRank===3 ? '🥉' : '👤';
+    wrappedSlides.push(mkSlide({
+      bg:'radial-gradient(circle at 65% 18%, #6f8ce0 0%, #3457c9 55%, #1e3583 100%)',
+      emoji:selEmoji, kicker:'DEIN RÜCKBLICK', title:wrappedSelName,
+      big: selPlayer ? selPlayer.total : '', bigSuffix:'Punkte',
+      sub: selBadges.length ? 'Badges: '+selBadges.map(b=>b.txt).join(', ') : 'Keine besonderen Abzeichen diese Saison',
+      rows: selPlayer ? [
+        {label:'Gesamtrang', value:selPlayer.lbRank+'.'},
+        {label:'Ø / Etappe', value:this.fmt1(selPlayer.avg)},
+        {label:'Bester Tag', value:this.stageLabel(selPlayer.best[0])+' · '+selPlayer.best[1]+' Pkt'},
+        {label:'Schwächster Tag', value:this.stageLabel(selPlayer.worst[0])+' · '+selPlayer.worst[1]+' Pkt'},
+      ] : [],
+      isPersonal:true, footnote:'',
+      playerPills: board.map(p=>{ const active = p.n===wrappedSelName; return {
+        name:p.n, border: active ? '#ffcb00' : 'rgba(255,255,255,0.3)',
+        bg: active ? '#ffcb00' : 'rgba(0,0,0,0.15)', fg: active ? '#1a1608' : 'inherit',
+        onClick:e=>{ e.stopPropagation(); this.setState({wrappedPlayer:p.n}); },
+      }; }),
+    }));
+    wrappedSlides.push(mkSlide({
+      bg:'radial-gradient(circle at 50% 50%, #1c1c1c 0%, #050505 70%, #000 100%)',
+      fg:'#ffcb00', emoji:'🏁', kicker:'', title:'Bis zur nächsten Etappe!',
+      sub:'Danke fürs Mitspielen — wir sehen uns 2027 wieder.', footnote:'zum Schließen tippen',
+    }));
+    const wIdx = Math.max(0, Math.min(S.wrappedIdx, wrappedSlides.length-1));
+    const wCanNext = wIdx < wrappedSlides.length-1;
+    const wSlide = wrappedSlides[wIdx];
+    const wAccent = wSlide.accent;
+    // Deterministische, aber pro Slide unterschiedliche Deko-"Blobs" (kein
+    // Math.random() — soll bei jedem Re-render der GLEICHEN Slide stabil
+    // bleiben, nur beim Slide-Wechsel neu aussehen).
+    const wBlobAnims = ['wrBlobA','wrBlobB','wrBlobC'];
+    const wBlobs = [0,1,2,3].map(i => {
+      const h = Math.abs(this.hashCode(wIdx+'-blob-'+i));
+      const top = 4 + (h % 80), left = 4 + (Math.floor(h/7) % 80);
+      const size = 220 + (h % 260);
+      const dur = (9 + (h % 60)/10).toFixed(1), delay = -((h % 90)/10).toFixed(1);
+      const anim = wBlobAnims[i % wBlobAnims.length];
+      const grad = 'radial-gradient(circle, '+wSlide.blobTint+' 0%, transparent 70%)';
+      return { style:'top:'+top+'%; left:'+left+'%; width:'+size+'px; height:'+size+'px; background:'+grad+'; animation:'+anim+' '+dur+'s ease-in-out infinite; animation-delay:'+delay+'s;' };
+    });
+    // Winziger, optisch unsichtbarer Dauer-"Jitter" pro Slide-Index: zwingt
+    // die CSS-Eintritts-Animationen zum Neustart, obwohl dieselben DOM-Knoten
+    // wiederverwendet werden (nur Text ändert sich sonst -> keine Retrigger).
+    const wJ = wIdx * 0.001;
+    const wrapped = {
+      open: S.wrappedOpen, ...wSlide,
+      idx:wIdx, total:wrappedSlides.length, canPrev: wIdx>0, canNext: wCanNext,
+      onPrev: e=>{ e.stopPropagation(); this.wrappedPrev(); },
+      onNext: e=>{ e.stopPropagation(); this.wrappedNext(); },
+      onClose: e=>{ e.stopPropagation(); this.closeWrapped(); },
+      onBgClick: ()=> wCanNext ? this.wrappedNext() : this.closeWrapped(),
+      dots: wrappedSlides.map((_,i)=>({ bg: i===wIdx ? wAccent : 'rgba(255,255,255,0.28)', onClick:e=>{ e.stopPropagation(); this.wrappedGoto(i); } })),
+      stop: e=>e.stopPropagation(),
+      blobs: wBlobs,
+      tEmoji:(0.60+wJ).toFixed(3)+'s', tKicker:(0.50+wJ).toFixed(3)+'s', tTitle:(0.55+wJ).toFixed(3)+'s',
+      tBig:(0.60+wJ).toFixed(3)+'s', tSub:(0.50+wJ).toFixed(3)+'s', tRows:(0.50+wJ).toFixed(3)+'s', tFoot:(0.50+wJ).toFixed(3)+'s',
+    };
     return {
       ready:true, showSparklines,
       stageDone:D.STAGES_DONE, stageTotal:D.STAGES_TOTAL,
       progressPct: Math.round(D.STAGES_DONE/D.STAGES_TOTAL*1000)/10 + '%',
       leaderName: leader.n, leaderPts: leader.total,
       tabs, isGesamt:S.tab==='gesamt', isEtappen:S.tab==='etappen', isFahrer:S.tab==='fahrer', isTeams:S.tab==='teams', isDuell:S.tab==='duell', isKanter:S.tab==='kanter',
-      rows, stagePills, stageRows, stageWinner, stageWinnerPts,
+      rows, stagePills, stageRows, stageWinner, stageWinnerPts, stageWinnerInitial,
       kanterHasData, kanterRows, kanterTeamTipTxt, kanterTotalCost, kanterTotalPoints, kanterBudgetLeft,
       kanterRiderCount, kanterStage:S.stage, kanterIsFixedStage, kanterFixedSummary,
-      gridLines, chartLines:lines, chartX, chartLegend, chartDots,
+      gridLines, chartLines:lines, chartX, chartLegend, chartDots, leaderAreaPts,
       hoverActive, hoverLineX, hoverDots2, hoverBox,
       chartHover: e=>this.chartHover(e), chartLeave: ()=>this.chartLeave(),
       fireworkActive: !!S.firework, fireworkBursts: S.firework ? S.firework.bursts : [], fireworkConfetti: S.firework ? S.firework.confetti : [],
@@ -1060,7 +1421,7 @@ class Component extends DCLogic {
       sortPtsBg: S.sort==='p'?'#ffcb00':'#fffdf8', sortPtsBorder: S.sort==='p'?'#141414':'#e7e1d2', sortPtsFg: S.sort==='p'?'#1a1608':'#141414',
       sortCountBg: S.sort==='by'?'#ffcb00':'#fffdf8', sortCountBorder: S.sort==='by'?'#141414':'#e7e1d2', sortCountFg: S.sort==='by'?'#1a1608':'#141414',
       teamCards, playerNames,
-      duellA:S.duellA, duellB:S.duellB,
+      duellA:S.duellA, duellB:S.duellB, duellAInitial, duellBInitial,
       onSelA: e=>this.setState({duellA:e.target.value}), onSelB: e=>this.setState({duellB:e.target.value}),
       duellStats, duellCommon, duellOnlyA, duellOnlyB,
       duellOnlyASum, duellOnlyBSum, duellCommonSum, duellOnlyACount, duellOnlyBCount, duellCommonCount,
@@ -1082,6 +1443,7 @@ class Component extends DCLogic {
       nextQ: ()=>{ const L=(D.QUOTES||[]).length||1; this.setState(s=>({ qi:(s.qi+1)%L })); },
       prevQ: ()=>{ const L=(D.QUOTES||[]).length||1; this.setState(s=>({ qi:(s.qi-1+L)%L })); },
       closeSel: ()=>this.setState({sel:null}), stopSel: e=>e.stopPropagation(),
+      tourComplete, openWrapped: ()=>this.openWrapped(), wrapped,
       ...drawer,
     };
   }
