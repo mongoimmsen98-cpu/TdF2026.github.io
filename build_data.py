@@ -62,9 +62,11 @@ PHOTO_CACHE_FILE = ROOT / ".rider_photos_cache.json"
 QUOTES_FILE = ROOT / "quotes.json"
 WIKIPEDIA_API = "https://en.wikipedia.org/w/api.php"
 
-# Gesamtzahl Etappen der Tour. Wie viele bereits gefahren sind, ergibt sich
-# automatisch aus den befüllten Etappen-Spalten in 'Ergebnisse_Roh'.
-STAGES_TOTAL = 26
+# Gesamtzahl Etappen der Tour (nicht die Wertungsspalten "S22 GC" etc. in
+# 'Ergebnisse_Roh' — das sind Abschluss-Klassements, keine echten Etappen).
+# Wie viele Etappen bereits gefahren sind, ergibt sich automatisch aus den
+# befüllten Etappen-Spalten.
+STAGES_TOTAL = 21
 
 
 # --------------------------------------------------------------------------
@@ -115,9 +117,23 @@ def stage_columns(ws, header_row=1):
     cols = []
     for c in range(1, ws.max_column + 1):
         v = ws.cell(header_row, c).value
-        if isinstance(v, str) and re.match(r"^\s*(S|Stage)\s*0*\d+", v):
+        if isinstance(v, str) and re.match(r"^\s*(S|Stage)\s*0*\d+\s*$", v):
             cols.append(c)
     return cols
+
+
+def classification_columns(ws, header_row=1):
+    """Spaltenindizes der Abschluss-Klassements-Spalten ('S22 GC' … 'S26
+    TeamRank') -> {'GC': col, 'Mountain': col, …}. Das sind keine Etappen,
+    sondern die finalen Trikot-/Team-Platzierungen der echten Tour."""
+    out = {}
+    for c in range(1, ws.max_column + 1):
+        v = ws.cell(header_row, c).value
+        if isinstance(v, str):
+            m = re.match(r"^\s*S\d+\s+(GC|Mountain|Sprint|Youth|TeamRank)\s*$", v)
+            if m:
+                out[m.group(1)] = c
+    return out
 
 
 # --------------------------------------------------------------------------
@@ -421,6 +437,61 @@ def read_startlist(wb):
     return riders, teams
 
 
+def read_final_classification(wb, riders_meta):
+    """Finale Klassements der echten Tour (Gelbes/Berg-/Grünes/Weißes Trikot
+    + Team-Wertung) aus 'S22 GC' .. 'S26 TeamRank' in 'Ergebnisse_Roh'. Spalte
+    2 ('Platz') gibt den Rang, die Zelle den Fahrer-Rohschlüssel (bei
+    TeamRank direkt den Teamnamen). Nicht jede Wertung ist vollständig
+    befüllt (z.B. Youth/TeamRank oft nur die ersten paar Plätze)."""
+    ws = wb["Ergebnisse_Roh"]
+    ccols = classification_columns(ws)
+    result = {}
+    for label, c in ccols.items():
+        rows = []
+        for r in range(2, ws.max_row + 1):
+            place = ws.cell(r, 2).value
+            val = ws.cell(r, c).value
+            if place is None or val in (None, ""):
+                continue
+            if label == "TeamRank":
+                name = str(val)
+            else:
+                meta = riders_meta.get(val)
+                name = meta["name"] if meta else split_rider_name(str(val))
+            rows.append({"place": int(place), "name": name})
+        rows.sort(key=lambda x: x["place"])
+        result[label] = rows
+    return result
+
+
+CLASSIFICATION_BONUS_LABELS = {
+    "GC": "Gelb", "Mountain": "Berg", "Sprint": "Grün", "Youth": "Weiß", "TeamRank": "Mannschaft",
+}
+
+
+def compute_classification_bonus(wb, pts_map):
+    """Bonus-Punkte für die Sieger:innen der finalen Klassements (nur Platz 1
+    zählt — die Punktematrix kennt für 'Gelb'/'Berg'/'Grün'/'Weiß'/
+    'Mannschaft' jeweils nur EINEN Wert, keine gestaffelte Platzierungs-
+    tabelle wie bei den Etappen). Ergebnis: {Fahrer-Rohschlüssel oder
+    Teamname: Bonus-Punkte}, fließt in die normalen Punktesummen von
+    Fahrer:innen/Teams (und damit Spieler:innen, die sie getippt haben)."""
+    ws = wb["Ergebnisse_Roh"]
+    ccols = classification_columns(ws)
+    bonus = defaultdict(int)
+    for label, col in ccols.items():
+        pts = pts_map.get(CLASSIFICATION_BONUS_LABELS[label])
+        if not pts:
+            continue
+        for r in range(2, ws.max_row + 1):
+            if ws.cell(r, 2).value == 1:
+                who = ws.cell(r, col).value
+                if who not in (None, ""):
+                    bonus[who] += pts
+                break
+    return dict(bonus)
+
+
 def read_quotes():
     """Teamfunk/Trash-Talk-Sprüche: bewusst NICHT in der xlsx, sondern in
     quotes.json — die xlsx wird unabhängig (z.B. von main) aktualisiert und
@@ -479,6 +550,11 @@ def build():
     riders_meta, teams = read_startlist(wb)
     rider_picks, team_pick, tipped_by = read_tips(wb, teams)
     quotes = read_quotes()
+    final_classification = read_final_classification(wb, riders_meta)
+    classification_bonus = compute_classification_bonus(wb, pts_map)
+    classification_bonus_scale = {
+        label: pts_map.get(bonus_label, 0) for label, bonus_label in CLASSIFICATION_BONUS_LABELS.items()
+    }
 
     if stages_done == 0:
         sys.exit("Keine gefahrenen Etappen in 'Ergebnisse_Roh' gefunden.")
@@ -530,11 +606,20 @@ def build():
         best, worst = best_worst(st)
         tp = team_pick.get(name)
         tip_pts = sum(ent_stages(tp)) if tp else 0
+        # Bonus-Punkte fuer getippte Trikot-Sieger:innen (Gelb/Berg/Gruen/
+        # Weiss/Mannschaft) -- gehoert NICHT ins per-Etappen-"stages"-Array
+        # (das wuerde Rangverlauf/Chart/Tagesbadges verfaelschen, da der Bonus
+        # erst am Ende feststeht), sondern separat zur Gesamtpunktzahl.
+        bonus = sum(classification_bonus.get(f, 0) for f in rider_picks.get(name, []))
+        if tp:
+            tp_bonus = classification_bonus.get(tp, 0)
+            bonus += tp_bonus
+            tip_pts += tp_bonus
         players_js.append({
             "n": name,
             "avg": round(total / stages_done, 1),
             "best": best, "worst": worst,
-            "tip": tp, "tipPts": tip_pts,
+            "tip": tp, "tipPts": tip_pts, "bonus": bonus,
             "stages": st, "ranks": ranks[name],
         })
 
@@ -545,7 +630,7 @@ def build():
         if key in teams:
             continue
         st = ent_stages(key)
-        p = sum(st)
+        p = sum(st) + classification_bonus.get(key, 0)
         by = sorted(tipped_by.get(key, ()), key=str.casefold)
         if p <= 0 and not by:
             continue
@@ -559,7 +644,7 @@ def build():
         rel.append({
             "n": meta["name"], "t": meta["team"], "s": meta["spec"],
             "a": meta["age"], "b": meta["bib"], "p": p, "bd": bd, "by": by,
-            "st": st, "c": rider_cost.get(key),
+            "st": st, "c": rider_cost.get(key), "bonus": classification_bonus.get(key, 0),
         })
     rel.sort(key=lambda x: (-x["p"], x["n"].casefold()))
 
@@ -573,7 +658,7 @@ def build():
     for name in player_names:
         t = team_pick.get(name)
         if t:
-            pts = sum(ent_stages(t))
+            pts = sum(ent_stages(t)) + classification_bonus.get(t, 0)
             if pts > 0:
                 team_pts[t] = pts
 
@@ -633,7 +718,7 @@ def build():
 
     write_data_js(
         stages_done, players_js, rel, team_pts, quotes, team_cost, optimal_teams, kanter_kader,
-        {t: team_stage_points[t] for t in team_cost},
+        {t: team_stage_points[t] for t in team_cost}, final_classification, classification_bonus_scale,
     )
 
     print(f"✓ data.js geschrieben ({OUT})")
@@ -646,6 +731,7 @@ def build():
 
 def write_data_js(
     stages_done, players_js, rel, team_pts, quotes, team_cost, optimal_teams, kanter_kader, team_stage_points,
+    final_classification, classification_bonus_scale,
 ):
     o = []
     o.append("// Tour de France 2026 Tipprunde — Daten")
@@ -656,16 +742,19 @@ def write_data_js(
     o.append(f"export const STAGES_TOTAL = {STAGES_TOTAL};")
     o.append("")
 
+    o.append("// bonus = Trikot-Bonus (Gelb/Berg/Gruen/Weiss/Mannschaft, siehe")
+    o.append("// FINAL_CLASSIFICATION) -- gehoert zur Gesamtpunktzahl, aber NICHT zu")
+    o.append("// den Etappen-Punkten (steht erst am Tourende fest).")
     o.append("export const PLAYERS = [")
     for p in players_js:
         tip = js_str(p["tip"]) if p["tip"] else "null"
         o.append(
             "  {{n:{n}, avg:{avg}, best:[{b0},{b1}], worst:[{w0},{w1}], "
-            "tip:{tip}, tipPts:{tp}, stages:[{st}], ranks:[{rk}]}},".format(
+            "tip:{tip}, tipPts:{tp}, bonus:{bonus}, stages:[{st}], ranks:[{rk}]}},".format(
                 n=js_str(p["n"]), avg=p["avg"],
                 b0=p["best"][0], b1=p["best"][1],
                 w0=p["worst"][0], w1=p["worst"][1],
-                tip=tip, tp=p["tipPts"],
+                tip=tip, tp=p["tipPts"], bonus=p["bonus"],
                 st=",".join(map(str, p["stages"])),
                 rk=",".join(map(str, p["ranks"])),
             )
@@ -676,7 +765,8 @@ def write_data_js(
     o.append("// Fahrer: n, t=Team, s=Spezialist, a=Alter, b=Startnummer, p=Punkte gesamt,")
     o.append("// bd=[Etappe,Punkte] bester Tag, by=getippt von, st=Punkte je Etappe,")
     o.append("// c=Kosten aus RIderPoints.csv fürs Kanter-Kader (null wenn unbekannt),")
-    o.append("// img=Wikipedia-Fotolink (null wenn kein Artikel/Foto gefunden)")
+    o.append("// img=Wikipedia-Fotolink (null wenn kein Artikel/Foto gefunden), bonus=Trikot-Bonus")
+    o.append("// (bereits in p enthalten, siehe CLASSIFICATION_BONUS)")
     o.append("export const RIDERS = [")
     for r in rel:
         bd = "null" if r["bd"] is None else f"[{r['bd'][0]},{r['bd'][1]}]"
@@ -689,8 +779,9 @@ def write_data_js(
         c = r["c"] if r["c"] is not None else "null"
         img = js_str(r["img"]) if r.get("img") else "null"
         o.append(
-            "  {{n:{n}, t:{t}, s:{s}, a:{a}, b:{b}, p:{p}, bd:{bd}, by:[{by}], st:[{st}], c:{c}, img:{img}}},".format(
+            "  {{n:{n}, t:{t}, s:{s}, a:{a}, b:{b}, p:{p}, bd:{bd}, by:[{by}], st:[{st}], c:{c}, img:{img}, bonus:{bonus}}},".format(
                 n=js_str(r["n"]), t=t, s=s, a=a, b=b, p=r["p"], bd=bd, by=by, st=st, c=c, img=img,
+                bonus=r.get("bonus", 0),
             )
         )
     o.append("];")
@@ -759,6 +850,27 @@ def write_data_js(
         o.append("export const KANTER_KADER = null;")
     o.append("")
 
+    o.append("// Finale Klassements der echten Tour (Gelbes/Berg-/Grünes/Weißes Trikot +")
+    o.append("// Team-Wertung), aus 'S22 GC'..'S26 TeamRank' in 'Ergebnisse_Roh' — keine")
+    o.append("// Etappen, sondern die Abschluss-Platzierungen. Manche Wertungen sind nur")
+    o.append("// teilweise befüllt (fehlende Plätze einfach nicht vorhanden).")
+    o.append("export const FINAL_CLASSIFICATION = {")
+    for label in ("GC", "Mountain", "Sprint", "Youth", "TeamRank"):
+        rows = final_classification.get(label, [])
+        entries = ",".join(f"{{place:{row['place']}, name:{js_str(row['name'])}}}" for row in rows)
+        o.append(f"  {label}: [{entries}],")
+    o.append("};")
+    o.append("")
+
+    o.append("// Bonus-Punkte fuer den jeweiligen Trikot-Sieger (nur Platz 1 zaehlt,")
+    o.append("// siehe Sheet 'Punktematrix': Gelb/Berg/Gruen/Weiss/Mannschaft) — bereits")
+    o.append("// in PLAYERS[].bonus / RIDERS[].p / TEAM_TIP_PTS eingerechnet.")
+    o.append("export const CLASSIFICATION_BONUS = {")
+    for label in ("GC", "Mountain", "Sprint", "Youth", "TeamRank"):
+        o.append(f"  {label}: {classification_bonus_scale.get(label, 0)},")
+    o.append("};")
+    o.append("")
+
     o.append("// Teamfunk — Trash Talk der Runde (Sheet 'Quotes' in der xlsx pflegen).")
     o.append("export const QUOTES = [")
     for q in quotes:
@@ -769,7 +881,7 @@ def write_data_js(
     o.append("""export function buildPlayers(){
   return PLAYERS.map(p => {
     const stages = p.stages;
-    const total = stages.reduce((a, b) => a + b, 0);
+    const total = stages.reduce((a, b) => a + b, 0) + (p.bonus || 0);
     const cum = []; let s = 0;
     stages.forEach(v => { s += v; cum.push(s); });
     return { ...p, total, cum };
